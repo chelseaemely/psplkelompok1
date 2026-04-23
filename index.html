@@ -1,0 +1,2297 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OseaSafe | Maritime Intel System v4</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap');
+
+        :root {
+            --navy: #0A1628;
+            --blue: #1D4ED8;
+            --sky: #0EA5E9;
+            --teal: #0D9488;
+            --emerald: #10B981;
+            --amber: #F59E0B;
+            --red: #EF4444;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: #F0F4F8;
+            color: #1E293B;
+            overflow: hidden;
+        }
+
+        .page-node { display: none; }
+        .page-node.active { display: flex; animation: fadeIn 0.4s ease-out forwards; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.35s ease-out; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+        }
+
+        @keyframes alertSlide {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .active-nav { background: linear-gradient(135deg, #EFF6FF, #DBEAFE); color: #1D4ED8; font-weight: 800; }
+        .active-nav i { color: #1D4ED8; }
+
+        #map-container { height: 100%; border-radius: 2rem; z-index: 10; width: 100%; }
+        .leaflet-container { border-radius: 2rem; }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+
+        .port-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid transparent;
+            background: white;
+        }
+        .port-card:hover {
+            transform: translateY(-4px);
+            border-color: #3B82F6;
+            box-shadow: 0 20px 40px -10px rgba(59, 130, 246, 0.2);
+        }
+        .port-card.selected { border-color: #1D4ED8; box-shadow: 0 20px 40px -10px rgba(29, 78, 216, 0.25); }
+
+        .modal-backdrop { background: rgba(10, 22, 40, 0.65); backdrop-filter: blur(12px); }
+        .error-shake { animation: shake 0.4s ease-in-out; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-6px); }
+            75% { transform: translateX(6px); }
+        }
+
+        .map-marker {
+            background: white;
+            border-radius: 12px;
+            padding: 5px 10px;
+            font-weight: 800;
+            font-size: 10px;
+            box-shadow: 0 8px 20px -4px rgba(0,0,0,0.15);
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            border: 2px solid;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .map-marker:hover { transform: translate(-50%, -50%) scale(1.1); }
+
+        .badge-aman { background: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; }
+        .badge-waspada { background: #FFFBEB; color: #92400E; border: 1px solid #FCD34D; }
+        .badge-bahaya { background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; }
+
+        .apikey-modal { background: rgba(10, 22, 40, 0.75); backdrop-filter: blur(16px); }
+
+        .typing-dot {
+            display: inline-block;
+            width: 5px; height: 5px;
+            background: #94A3B8;
+            border-radius: 50%;
+            animation: typingBounce 1.2s infinite ease-in-out;
+        }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typingBounce {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-5px); }
+        }
+
+        .condition-meter {
+            height: 8px;
+            border-radius: 99px;
+            background: linear-gradient(90deg, #10B981 0%, #F59E0B 50%, #EF4444 100%);
+            position: relative;
+        }
+        .condition-needle {
+            position: absolute;
+            top: -4px;
+            width: 16px; height: 16px;
+            background: white;
+            border-radius: 50%;
+            border: 3px solid #1D4ED8;
+            transform: translateX(-50%);
+            transition: left 0.5s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .chart-wrap { position: relative; height: 200px; }
+
+        .ocean-gradient {
+            background: linear-gradient(135deg, #0A1628 0%, #0D2E5A 50%, #0A3D62 100%);
+        }
+        .teal-gradient {
+            background: linear-gradient(135deg, #042F2E 0%, #065F46 100%);
+        }
+
+        /* Alert/Warning page */
+        .alert-card {
+            animation: alertSlide 0.4s ease-out;
+        }
+
+        /* Tsunami/Warning severity colors */
+        .sev-tsunami { background: linear-gradient(135deg, #1a0000, #4a0000); border-color: #ff0000; }
+        .sev-extreme { background: linear-gradient(135deg, #1a0800, #5a2000); border-color: #ff4400; }
+        .sev-high { background: linear-gradient(135deg, #1a1000, #5a3000); border-color: #ff8800; }
+        .sev-moderate { background: linear-gradient(135deg, #1a1500, #4a3a00); border-color: #ffcc00; }
+
+        .data-row { animation: fadeIn 0.3s ease-out; }
+        .fish-float { animation: float 3s ease-in-out infinite; }
+
+        .skeleton {
+            background: linear-gradient(90deg, #E2E8F0 25%, #F1F5F9 50%, #E2E8F0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 8px;
+        }
+
+        /* Pasang Surut chart */
+        .tide-chart-wrap { position: relative; height: 120px; }
+
+        /* Date tab selector */
+        .date-tab { transition: all 0.2s; cursor: pointer; }
+        .date-tab.active-date { background: #1D4ED8; color: white; }
+        .date-tab:not(.active-date) { background: white; color: #64748B; }
+        .date-tab:not(.active-date):hover { background: #EFF6FF; color: #1D4ED8; }
+
+        #page-app { display: flex !important; }
+    </style>
+</head>
+<body>
+
+<!-- API KEY MODAL -->
+<div id="modal-apikey" class="hidden fixed inset-0 z-[300] apikey-modal items-center justify-center p-6">
+    <div class="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-10 text-center border border-slate-100">
+        <div class="w-16 h-16 bg-gradient-to-br from-orange-400 to-orange-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+            <i data-lucide="key" class="w-8 h-8 text-white"></i>
+        </div>
+        <h3 class="text-2xl font-black text-slate-900 tracking-tighter mb-2">API Key Gemini AI</h3>
+        <p class="text-slate-400 text-xs font-semibold mb-1">Dapatkan gratis di <a href="https://aistudio.google.com" target="_blank" class="text-blue-600 underline font-bold">aistudio.google.com</a></p>
+        <p class="text-slate-300 text-[10px] font-bold mb-6 uppercase tracking-wider">Disimpan hanya di browser Anda</p>
+        <input type="password" id="apikey-input" placeholder="AQ.Ab8..." class="w-full bg-slate-50 border-2 border-slate-200 p-4 rounded-2xl text-sm font-bold focus:outline-none focus:border-blue-400 mb-3 text-center tracking-wider transition-all">
+        <input type="password" id="kkp-token-input" placeholder="KKP API Token (opsional)" class="w-full bg-slate-50 border-2 border-slate-200 p-4 rounded-2xl text-sm font-bold focus:outline-none focus:border-teal-400 mb-2 text-center tracking-wider transition-all">
+        <div class="text-[10px] text-slate-400 mb-3">Token KKP dari <a href="https://md.kkp.go.id/Documentation" target="_blank" class="text-blue-600 underline">md.kkp.go.id</a></div>
+        <div id="apikey-error" class="hidden text-red-500 text-[10px] font-black uppercase mb-3 bg-red-50 p-2 rounded-xl">API Key harus diawali AQ.Ab8</div>
+        <button onclick="saveApiKey()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg hover:bg-blue-700 active:scale-95 transition-all mb-3">Simpan & Aktifkan</button>
+        <button onclick="closeApiKeyModal()" class="w-full text-slate-400 text-[10px] font-black uppercase tracking-widest py-2 hover:text-slate-600 transition-colors">Lewati (mode demo)</button>
+    </div>
+</div>
+
+<!-- LOGIN PAGE -->
+<div id="page-login" class="page-node active fixed inset-0 z-[100] bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 items-center justify-center p-6">
+    <div class="absolute inset-0 overflow-hidden">
+        <div class="absolute bottom-0 left-0 right-0 h-64 opacity-10">
+            <svg viewBox="0 0 1440 200" xmlns="http://www.w3.org/2000/svg" style="animation: float 4s ease-in-out infinite;">
+                <path d="M0,100 C240,20 480,180 720,100 C960,20 1200,180 1440,100 L1440,200 L0,200 Z" fill="#0EA5E9"/>
+            </svg>
+        </div>
+    </div>
+    <div class="relative w-full max-w-md bg-white/5 backdrop-blur-xl rounded-[3rem] shadow-2xl p-12 border border-white/10 text-center">
+        <div class="bg-gradient-to-br from-blue-500 to-blue-700 w-20 h-20 rounded-3xl flex items-center justify-center text-white mx-auto mb-8 shadow-2xl shadow-blue-500/30">
+            <i data-lucide="anchor" class="w-10 h-10"></i>
+        </div>
+        <h1 class="text-5xl font-black text-white tracking-tighter italic mb-1 leading-none">OseaSafe</h1>
+        <p class="text-blue-300/60 font-bold text-[10px] uppercase tracking-[0.4em] mb-10">Maritime Intelligence Indonesia v4</p>
+        <form onsubmit="handleLogin(event)" id="login-form" class="space-y-5 text-left">
+            <div id="login-error" class="hidden bg-red-500/10 text-red-400 text-[10px] font-bold p-3 rounded-2xl text-center border border-red-500/20 uppercase">Email atau Sandi Salah!</div>
+            <div>
+                <label class="text-[10px] font-black text-blue-300/60 uppercase tracking-widest ml-2 mb-2 block">Email Nakhoda</label>
+                <input type="email" id="login-email" required placeholder="nakhoda@oseasafe.com" class="w-full bg-white/10 border border-white/20 text-white placeholder-white/30 p-4 rounded-2xl text-sm font-bold focus:outline-none focus:border-blue-400 transition-all">
+            </div>
+            <div>
+                <label class="text-[10px] font-black text-blue-300/60 uppercase tracking-widest ml-2 mb-2 block">Sandi</label>
+                <input type="password" id="login-pass" required placeholder="••••••••" class="w-full bg-white/10 border border-white/20 text-white placeholder-white/30 p-4 rounded-2xl text-sm font-bold focus:outline-none focus:border-blue-400 transition-all">
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-sm shadow-xl shadow-blue-600/30 hover:bg-blue-500 active:scale-95 transition-all uppercase tracking-widest mt-2">Masuk Sekarang</button>
+        </form>
+        <p class="text-xs font-bold text-white/30 mt-8">Belum punya akses? <button onclick="goToPage('register')" class="text-blue-400 hover:text-blue-300 font-black">Daftar Akun</button></p>
+        <p class="text-[10px] text-white/20 mt-3 font-mono">Demo: nakhoda@oseasafe.com / kevin</p>
+    </div>
+</div>
+
+<!-- REGISTER PAGE -->
+<div id="page-register" class="page-node fixed inset-0 z-[100] bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 items-center justify-center p-6">
+    <div class="w-full max-w-md bg-white/5 backdrop-blur-xl rounded-[3rem] shadow-2xl p-12 border border-white/10">
+        <h2 class="text-3xl font-black text-white tracking-tighter leading-none mb-2">Registrasi Nakhoda</h2>
+        <p class="text-blue-300/50 text-[10px] uppercase font-bold tracking-widest mb-8">Daftarkan Kapal & Identitas Anda</p>
+        <form onsubmit="handleRegister(event)" class="space-y-4 font-bold">
+            <input type="text" id="reg-name" required placeholder="Nama Lengkap Nakhoda..." class="w-full bg-white/10 border border-white/20 text-white placeholder-white/30 p-4 rounded-2xl text-sm font-bold focus:outline-none focus:border-blue-400 transition-all">
+            <input type="text" id="reg-ship" required placeholder="Nama Kapal (KM)..." class="w-full bg-white/10 border border-white/20 text-white placeholder-white/30 p-4 rounded-2xl text-sm font-bold focus:outline-none focus:border-blue-400 transition-all">
+            <input type="email" id="reg-email" required placeholder="Email..." class="w-full bg-white/10 border border-white/20 text-white placeholder-white/30 p-4 rounded-2xl text-sm font-bold focus:outline-none focus:border-blue-400 transition-all">
+            <input type="password" id="reg-pass" required placeholder="Buat Sandi..." class="w-full bg-white/10 border border-white/20 text-white placeholder-white/30 p-4 rounded-2xl text-sm font-bold focus:outline-none focus:border-blue-400 transition-all">
+            <button type="submit" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-sm shadow-xl uppercase mt-4 active:scale-95 transition-all hover:bg-blue-500">Daftar Sekarang</button>
+        </form>
+        <button onclick="goToPage('login')" class="mt-6 text-[10px] font-black text-white/30 uppercase hover:text-blue-400 tracking-widest block text-center w-full transition-colors">← Kembali ke Login</button>
+    </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="page-app" class="page-node h-screen w-full overflow-hidden" style="display:none;">
+
+    <!-- SIDEBAR -->
+    <aside class="w-64 bg-white border-r border-slate-100 flex flex-col shrink-0 shadow-sm">
+        <div class="p-6 pb-4">
+            <div class="flex items-center gap-3 mb-1">
+                <div class="bg-gradient-to-br from-blue-600 to-blue-800 p-2.5 rounded-2xl text-white shadow-lg shadow-blue-200">
+                    <i data-lucide="anchor" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black text-blue-900 tracking-tighter italic leading-none">OseaSafe</h1>
+                    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Maritime Intel v4</p>
+                </div>
+            </div>
+        </div>
+
+        <nav class="flex-1 px-3 space-y-1 mt-2 overflow-y-auto">
+            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-link active-nav w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-sm transition-all text-left">
+                <i data-lucide="home" class="w-4 h-4"></i> Dashboard
+            </button>
+            <button onclick="switchTab('alerts')" id="nav-alerts" class="nav-link w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-sm transition-all text-slate-500 hover:bg-slate-50 text-left relative">
+                <i data-lucide="alert-octagon" class="w-4 h-4"></i> Peringatan Dini
+                <span id="alert-badge" class="absolute right-3 top-2.5 w-5 h-5 bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center">2</span>
+            </button>
+            <button onclick="switchTab('map')" id="nav-map" class="nav-link w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-sm transition-all text-slate-500 hover:bg-slate-50 text-left">
+                <i data-lucide="map" class="w-4 h-4"></i> Peta Interaktif
+            </button>
+            <button onclick="switchTab('weather')" id="nav-weather" class="nav-link w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-sm transition-all text-slate-500 hover:bg-slate-50 text-left">
+                <i data-lucide="cloud-sun" class="w-4 h-4"></i> Cuaca & Arus
+            </button>
+            <button onclick="switchTab('hotspot')" id="nav-hotspot" class="nav-link w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-sm transition-all text-slate-500 hover:bg-slate-50 text-left">
+                <i data-lucide="fish" class="w-4 h-4"></i> Fishing Hotspot AI
+            </button>
+            <button onclick="switchTab('profile')" id="nav-profile" class="nav-link w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-sm transition-all text-slate-500 hover:bg-slate-50 text-left">
+                <i data-lucide="user" class="w-4 h-4"></i> Profil Nakhoda
+            </button>
+            <button onclick="switchTab('settings')" id="nav-settings" class="nav-link w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-sm transition-all text-slate-500 hover:bg-slate-50 text-left">
+                <i data-lucide="settings" class="w-4 h-4"></i> Pengaturan
+            </button>
+        </nav>
+
+        <div class="p-4">
+            <div class="ocean-gradient rounded-2xl p-5 text-white shadow-xl relative overflow-hidden">
+                <div class="relative z-10">
+                    <p class="text-[8px] font-black opacity-40 uppercase mb-2 tracking-widest">BMKG Real-time</p>
+                    <div class="flex items-center gap-2 text-xs font-bold text-emerald-400 mb-3">
+                        <div class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                        <span id="bmkg-status-text">Data Terkini</span>
+                    </div>
+                    <p class="text-[9px] text-white/40 font-mono" id="last-update-time">--:-- WITA</p>
+                </div>
+                <i data-lucide="satellite" class="absolute -bottom-3 -right-3 w-14 h-14 text-white/5 rotate-12"></i>
+            </div>
+            <button onclick="openApiKeyModal()" class="w-full mt-2 text-[8px] font-black text-slate-400 uppercase tracking-widest py-2 hover:text-blue-600 transition-colors flex flex-col items-center justify-center gap-1">
+                <span class="flex items-center gap-1">
+                    <i data-lucide="key" class="w-3 h-3"></i>
+                    <span id="sidebar-key-status">Atur API Key Gemini</span>
+                </span>
+                <span id="sidebar-kkp-status" class="text-[8px] text-slate-400 opacity-80">Token KKP belum diset</span>
+            </button>
+            <div class="mt-2 text-[8px] uppercase tracking-widest text-slate-400">
+                Sumber: <a href="https://maritim.bmkg.go.id" target="_blank" class="text-blue-500 hover:underline">maritim.bmkg.go.id</a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 flex flex-col overflow-hidden relative">
+
+        <!-- HEADER -->
+        <header class="h-16 bg-white border-b border-slate-100 px-8 flex items-center justify-between shrink-0">
+            <div class="relative group">
+                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4 group-focus-within:text-blue-500 transition-colors"></i>
+                <input id="search-input" onkeyup="searchPorts()" type="text" placeholder="Cari wilayah perairan..." class="w-72 bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all font-semibold">
+            </div>
+            <div class="flex items-center gap-5">
+                <button onclick="syncBMKGData()" id="sync-btn" class="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-blue-100">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5" id="sync-icon"></i> Sinkron BMKG
+                </button>
+                <button onclick="switchTab('alerts')" class="relative text-slate-400 hover:text-red-600 transition-colors">
+                    <i data-lucide="bell" class="w-5 h-5"></i>
+                    <span id="header-alert-dot" class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border border-white animate-pulse"></span>
+                </button>
+                <div onclick="switchTab('profile')" class="flex items-center gap-3 pl-5 border-l border-slate-100 cursor-pointer group">
+                    <div class="text-right">
+                        <p id="display-user-name" class="text-sm font-black text-slate-900 leading-none group-hover:text-blue-600 transition-colors uppercase">Nahkoda Kevin</p>
+                        <p id="display-user-ship" class="text-[9px] font-bold text-slate-400 uppercase tracking-tight leading-none mt-0.5">KM. JAYA ABADI</p>
+                    </div>
+                    <div id="user-avatar" class="w-9 h-9 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center text-white font-black text-sm shadow-lg group-hover:scale-105 transition-transform">K</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto relative">
+
+            <!-- ==================== TAB: DASHBOARD ==================== -->
+            <section id="tab-dashboard" class="tab-content active p-8 space-y-8 max-w-7xl mx-auto">
+
+                <!-- Emergency Banner -->
+                <div id="emergency-banner" class="bg-gradient-to-r from-red-50 to-orange-50 border border-red-100 rounded-2xl p-5 flex items-center justify-between shadow-sm">
+                    <div class="flex items-center gap-4">
+                        <div class="bg-red-500 p-3 rounded-xl text-white shadow-lg">
+                            <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-red-900 font-black text-base leading-none">⚠️ Peringatan Aktif BMKG</h3>
+                            <p id="emergency-text" class="text-red-700/70 text-xs font-semibold mt-1">Perairan Sitaro: Gelombang 2.8m. Kapal kecil dilarang berlayar.</p>
+                        </div>
+                    </div>
+                    <button onclick="switchTab('alerts')" class="bg-red-100 text-red-600 px-6 py-2 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-red-200 transition-all shrink-0">Lihat Semua →</button>
+                </div>
+
+                <!-- Stats -->
+                <div class="grid grid-cols-4 gap-5">
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Wilayah Dipantau</span>
+                            <div class="w-8 h-8 bg-blue-50 rounded-xl flex items-center justify-center"><i data-lucide="map-pin" class="w-4 h-4 text-blue-500"></i></div>
+                        </div>
+                        <p class="text-3xl font-black text-slate-900">5</p>
+                        <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">Sulawesi Utara</p>
+                    </div>
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Status Aman</span>
+                            <div class="w-8 h-8 bg-emerald-50 rounded-xl flex items-center justify-center"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i></div>
+                        </div>
+                        <p class="text-3xl font-black text-emerald-600" id="stat-aman">2</p>
+                        <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">Aman Dilayari</p>
+                    </div>
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Status Waspada</span>
+                            <div class="w-8 h-8 bg-amber-50 rounded-xl flex items-center justify-center"><i data-lucide="alert-circle" class="w-4 h-4 text-amber-500"></i></div>
+                        </div>
+                        <p class="text-3xl font-black text-amber-600" id="stat-waspada">2</p>
+                        <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">Harap Waspada</p>
+                    </div>
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Status Bahaya</span>
+                            <div class="w-8 h-8 bg-red-50 rounded-xl flex items-center justify-center"><i data-lucide="x-circle" class="w-4 h-4 text-red-500"></i></div>
+                        </div>
+                        <p class="text-3xl font-black text-red-600" id="stat-bahaya">1</p>
+                        <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">Larang Berlayar</p>
+                    </div>
+                </div>
+
+                <!-- Port Cards - ONLY 5 Sulawesi Utara locations -->
+                <div>
+                    <div class="flex items-center justify-between mb-5">
+                        <h2 class="text-xl font-black text-slate-900 leading-none uppercase tracking-tighter">Pantauan Wilayah BMKG — Sulawesi Utara</h2>
+                        <a href="https://maritim.bmkg.go.id" target="_blank" class="text-[10px] font-black text-blue-500 uppercase tracking-widest bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-all">BMKG Live →</a>
+                    </div>
+                    <div id="port-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+                </div>
+
+                <!-- Focus Panel -->
+                <div id="focus-panel" class="ocean-gradient rounded-3xl p-10 text-white relative overflow-hidden shadow-2xl">
+                    <div class="relative z-10">
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                            <span class="text-[9px] font-black uppercase opacity-40 tracking-widest">Fokus Analisis Aktif</span>
+                        </div>
+                        <h2 id="focus-name" class="text-4xl font-black mb-4 tracking-tighter leading-none uppercase">Pelabuhan Manado</h2>
+                        <p id="focus-desc" class="text-blue-100/60 text-base font-medium max-w-lg mb-8 leading-relaxed italic">"Kondisi sangat ideal untuk nelayan kecil."</p>
+                        <div class="grid grid-cols-6 gap-4 mb-8">
+                            <div class="bg-white/10 p-4 rounded-2xl border border-white/10 text-center">
+                                <i data-lucide="waves" class="w-5 h-5 mb-2 text-blue-300 mx-auto"></i>
+                                <p class="text-[8px] font-black uppercase opacity-50">Gelombang</p>
+                                <p class="text-2xl font-black mt-1"><span id="focus-wave">0.5</span><span class="text-xs ml-0.5 opacity-40">m</span></p>
+                            </div>
+                            <div class="bg-white/10 p-4 rounded-2xl border border-white/10 text-center">
+                                <i data-lucide="wind" class="w-5 h-5 mb-2 text-sky-300 mx-auto"></i>
+                                <p class="text-[8px] font-black uppercase opacity-50">Angin</p>
+                                <p class="text-2xl font-black mt-1"><span id="focus-wind">8</span><span class="text-xs ml-0.5 opacity-40">kt</span></p>
+                            </div>
+                            <div class="bg-white/10 p-4 rounded-2xl border border-white/10 text-center">
+                                <i data-lucide="thermometer" class="w-5 h-5 mb-2 text-orange-300 mx-auto"></i>
+                                <p class="text-[8px] font-black uppercase opacity-50">Suhu</p>
+                                <p class="text-2xl font-black mt-1"><span id="focus-temp">28</span><span class="text-xs ml-0.5 opacity-40">°C</span></p>
+                            </div>
+                            <div class="bg-white/10 p-4 rounded-2xl border border-white/10 text-center">
+                                <i data-lucide="droplets" class="w-5 h-5 mb-2 text-cyan-300 mx-auto"></i>
+                                <p class="text-[8px] font-black uppercase opacity-50">Arus</p>
+                                <p class="text-2xl font-black mt-1"><span id="focus-current">0.7</span><span class="text-xs ml-0.5 opacity-40">kt</span></p>
+                            </div>
+                            <div class="bg-white/10 p-4 rounded-2xl border border-white/10 text-center">
+                                <i data-lucide="arrow-up-down" class="w-5 h-5 mb-2 text-teal-300 mx-auto"></i>
+                                <p class="text-[8px] font-black uppercase opacity-50">Pasang</p>
+                                <p class="text-xl font-black mt-1"><span id="focus-tide-high">1.2</span><span class="text-xs ml-0.5 opacity-40">m</span></p>
+                            </div>
+                            <div class="bg-white/10 p-4 rounded-2xl border border-white/10 text-center justify-center flex flex-col items-center">
+                                <p class="text-[8px] font-black uppercase opacity-50 mb-1">Status</p>
+                                <p id="focus-status" class="text-lg font-black text-emerald-400 uppercase tracking-widest">AMAN</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 flex-wrap">
+                            <button onclick="switchTab('map')" class="bg-white text-blue-900 px-8 py-3 rounded-xl font-black text-xs shadow-xl hover:scale-105 active:scale-95 transition-all uppercase tracking-widest">🗺 Peta Navigasi</button>
+                            <button onclick="toggleAI(true)" class="bg-blue-700/50 border border-blue-500/30 text-white px-8 py-3 rounded-xl font-black text-xs hover:bg-blue-700/70 transition-all uppercase tracking-widest">🤖 Kapten AI</button>
+                            <button onclick="openTabDetail(selectedLoc.id)" class="bg-white/10 border border-white/20 text-white px-8 py-3 rounded-xl font-black text-xs hover:bg-white/20 transition-all uppercase tracking-widest">📊 Grafik Detail</button>
+                        </div>
+                    </div>
+                    <div class="absolute -bottom-20 -right-20 w-80 h-80 opacity-5">
+                        <svg viewBox="0 0 200 200"><path d="M0,100 C50,0 150,200 200,100 L200,200 L0,200 Z" fill="white"/></svg>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== TAB: PERINGATAN DINI ==================== -->
+            <section id="tab-alerts" class="tab-content p-8 space-y-8 max-w-6xl mx-auto">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-3xl font-black tracking-tighter leading-none uppercase text-slate-900">🚨 Pusat Peringatan Dini</h2>
+                        <p class="text-slate-400 text-sm font-semibold mt-2">Peringatan Cuaca Ekstrem, Gelombang Tinggi & Tsunami — Sulawesi Utara</p>
+                    </div>
+                    <div class="flex gap-3 items-center">
+                        <a href="https://inatews.bmkg.go.id" target="_blank" class="text-[10px] font-black text-blue-500 uppercase tracking-widest bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-100 transition-all flex items-center gap-2 border border-blue-100">
+                            <i data-lucide="external-link" class="w-3 h-3"></i> InaTEWS BMKG
+                        </a>
+                        <button onclick="refreshAlerts()" class="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-red-100 hover:bg-red-100 transition-all flex items-center gap-2">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5" id="alert-refresh-icon"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tsunami Alert (most critical) -->
+                <div id="tsunami-alert-section">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
+                        <h3 class="text-sm font-black text-slate-800 uppercase tracking-widest">Peringatan Tsunami & Gempa</h3>
+                        <span class="text-[9px] bg-red-100 text-red-700 px-2 py-1 rounded-lg font-black uppercase">Real-time BMKG</span>
+                    </div>
+                    <div id="tsunami-alerts-container" class="space-y-3"></div>
+                </div>
+
+                <!-- Cuaca Ekstrem -->
+                <div>
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-3 h-3 bg-amber-500 rounded-full animate-pulse"></div>
+                        <h3 class="text-sm font-black text-slate-800 uppercase tracking-widest">Peringatan Cuaca Ekstrem & Gelombang</h3>
+                    </div>
+                    <div id="weather-alerts-container" class="space-y-3"></div>
+                </div>
+
+                <!-- Info Source -->
+                <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+                    <h4 class="font-black text-sm text-slate-900 mb-4 uppercase">Sumber Data & Referensi Resmi</h4>
+                    <div class="grid grid-cols-3 gap-4">
+                        <a href="https://inatews.bmkg.go.id" target="_blank" class="flex items-center gap-3 p-4 bg-red-50 rounded-xl border border-red-100 hover:border-red-300 transition-all">
+                            <i data-lucide="radio" class="w-5 h-5 text-red-600"></i>
+                            <div>
+                                <p class="font-black text-red-900 text-xs">InaTEWS BMKG</p>
+                                <p class="text-[9px] text-red-600 font-bold">Sistem Peringatan Tsunami</p>
+                            </div>
+                        </a>
+                        <a href="https://maritim.bmkg.go.id" target="_blank" class="flex items-center gap-3 p-4 bg-blue-50 rounded-xl border border-blue-100 hover:border-blue-300 transition-all">
+                            <i data-lucide="anchor" class="w-5 h-5 text-blue-600"></i>
+                            <div>
+                                <p class="font-black text-blue-900 text-xs">BMKG Maritim</p>
+                                <p class="text-[9px] text-blue-600 font-bold">Cuaca Perairan & Pelabuhan</p>
+                            </div>
+                        </a>
+                        <a href="https://www.bmkg.go.id/gempabumi" target="_blank" class="flex items-center gap-3 p-4 bg-amber-50 rounded-xl border border-amber-100 hover:border-amber-300 transition-all">
+                            <i data-lucide="activity" class="w-5 h-5 text-amber-600"></i>
+                            <div>
+                                <p class="font-black text-amber-900 text-xs">Gempa BMKG</p>
+                                <p class="text-[9px] text-amber-600 font-bold">Info Gempa Terkini</p>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Safety Guidelines -->
+                <div class="bg-gradient-to-r from-slate-900 to-blue-900 rounded-3xl p-8 text-white">
+                    <h3 class="text-lg font-black uppercase mb-5">Prosedur Darurat Saat Peringatan Tsunami</h3>
+                    <div class="grid grid-cols-4 gap-4 text-sm">
+                        <div class="bg-white/10 p-4 rounded-2xl border border-white/10">
+                            <p class="text-2xl mb-2">🚢</p>
+                            <p class="font-black text-xs uppercase mb-1">Kapal di Laut</p>
+                            <p class="text-white/60 text-xs">Segera menuju perairan dalam (>200m). JANGAN kembali ke pelabuhan.</p>
+                        </div>
+                        <div class="bg-white/10 p-4 rounded-2xl border border-white/10">
+                            <p class="text-2xl mb-2">⚓</p>
+                            <p class="font-black text-xs uppercase mb-1">Kapal di Pelabuhan</p>
+                            <p class="text-white/60 text-xs">Lepaskan tambatan, keluar ke laut dalam segera. Tinggalkan barang bawaan.</p>
+                        </div>
+                        <div class="bg-white/10 p-4 rounded-2xl border border-white/10">
+                            <p class="text-2xl mb-2">📻</p>
+                            <p class="font-black text-xs uppercase mb-1">Komunikasi</p>
+                            <p class="text-white/60 text-xs">Pantau radio VHF CH 16 dan siaran BMKG. Hubungi Basarnas: 115</p>
+                        </div>
+                        <div class="bg-white/10 p-4 rounded-2xl border border-white/10">
+                            <p class="text-2xl mb-2">📞</p>
+                            <p class="font-black text-xs uppercase mb-1">Nomor Darurat</p>
+                            <p class="text-white/60 text-xs">BMKG: 196 | Basarnas: 115 | BNPB: 117 | Polisi Perairan: 021-7221207</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== TAB: PETA INTERAKTIF ==================== -->
+            <section id="tab-map" class="tab-content h-full p-6 gap-5" style="height: calc(100vh - 64px);">
+                <div class="flex items-center justify-between shrink-0">
+                    <div>
+                        <h2 class="text-2xl font-black tracking-tighter leading-none uppercase text-slate-900">Peta Maritim Sulawesi Utara</h2>
+                        <p class="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">5 Wilayah Pemantauan · Klik marker untuk detail</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <div class="relative">
+                            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4"></i>
+                            <input type="text" placeholder="Cari perairan di peta..." oninput="searchOnMap(this.value)" id="map-search-input"
+                                class="bg-white border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm font-bold focus:outline-none focus:border-blue-400 transition-all w-60">
+                        </div>
+                        <button onclick="refreshLiveMap()" class="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center gap-2 hover:bg-blue-700 transition-all">
+                            <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Sinkronkan
+                        </button>
+                    </div>
+                </div>
+                <div id="map-search-results" class="hidden shrink-0 bg-white rounded-2xl border border-slate-200 shadow-lg p-3 flex flex-wrap gap-2"></div>
+                <div class="flex gap-5 flex-1 min-h-0">
+                    <div class="flex-1 min-h-0 bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
+                        <div id="map-container" class="w-full h-full"></div>
+                    </div>
+                    <div class="w-56 shrink-0 space-y-3">
+                        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                            <h4 class="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-3">Legenda Status</h4>
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-emerald-500"></div><span class="text-xs font-bold text-slate-700">Aman (&lt; 1.25m)</span></div>
+                                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-amber-500"></div><span class="text-xs font-bold text-slate-700">Waspada (1.25–2.5m)</span></div>
+                                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-red-500"></div><span class="text-xs font-bold text-slate-700">Bahaya (&gt; 2.5m)</span></div>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                            <h4 class="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-3">5 Wilayah Sulut</h4>
+                            <div id="map-location-list" class="space-y-1.5"></div>
+                        </div>
+                        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                            <h4 class="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Update Terakhir</h4>
+                            <p class="text-xs font-bold text-slate-700 font-mono" id="map-last-update">--</p>
+                            <p class="text-[9px] text-slate-400 mt-1">Sumber: BMKG Maritim</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== TAB: CUACA & ARUS ==================== -->
+            <section id="tab-weather" class="tab-content p-8 space-y-8 max-w-7xl mx-auto">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-3xl font-black tracking-tighter leading-none uppercase text-slate-900">Cuaca & Arus Laut</h2>
+                        <p class="text-slate-400 text-sm font-semibold mt-2">Data BMKG Maritim — <a href="https://maritim.bmkg.go.id" target="_blank" class="text-blue-500 hover:underline">maritim.bmkg.go.id</a></p>
+                    </div>
+                    <select id="weather-location-select" onchange="updateWeatherTab(this.value)" class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold focus:outline-none focus:border-blue-400 cursor-pointer shadow-sm">
+                        <option value="mnd">Pelabuhan Manado</option>
+                        <option value="btg">Pelabuhan Bitung</option>
+                        <option value="str">Perairan Sitaro</option>
+                        <option value="tah">Pelabuhan Tahuna</option>
+                        <option value="lik">Perairan Likupang</option>
+                    </select>
+                </div>
+
+                <!-- Safety Condition Meter -->
+                <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 class="text-xl font-black text-slate-900 leading-none">Indikator Keselamatan Berlayar</h3>
+                            <p id="weather-loc-name" class="text-slate-400 text-sm font-semibold mt-1">Pelabuhan Manado</p>
+                        </div>
+                        <div id="safety-badge" class="px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-widest badge-aman">🟢 AMAN BERLAYAR</div>
+                    </div>
+                    <div class="condition-meter mb-4">
+                        <div class="condition-needle" id="safety-needle" style="left: 10%"></div>
+                    </div>
+                    <div class="flex justify-between text-[9px] font-black uppercase text-slate-400 tracking-widest">
+                        <span>SANGAT AMAN</span><span>WASPADA</span><span>BAHAYA</span>
+                    </div>
+                </div>
+
+                <!-- Weather Data Grid + Tide -->
+                <div class="grid grid-cols-2 lg:grid-cols-5 gap-5">
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center"><i data-lucide="waves" class="w-5 h-5 text-blue-600"></i></div>
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Gelombang</span>
+                        </div>
+                        <p class="text-4xl font-black text-slate-900"><span id="w-wave">0.5</span><span class="text-lg opacity-30 ml-1">m</span></p>
+                        <p id="w-wave-status" class="text-xs font-bold text-emerald-600 mt-2 uppercase">Rendah - Aman</p>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center"><i data-lucide="wind" class="w-5 h-5 text-sky-600"></i></div>
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Angin</span>
+                        </div>
+                        <p class="text-4xl font-black text-slate-900"><span id="w-wind">8</span><span class="text-lg opacity-30 ml-1">kt</span></p>
+                        <p id="w-wind-status" class="text-xs font-bold text-emerald-600 mt-2 uppercase">Lemah - Ideal</p>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center"><i data-lucide="thermometer" class="w-5 h-5 text-orange-500"></i></div>
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Suhu Laut</span>
+                        </div>
+                        <p class="text-4xl font-black text-slate-900"><span id="w-temp">28</span><span class="text-lg opacity-30 ml-1">°C</span></p>
+                        <p class="text-xs font-bold text-blue-600 mt-2 uppercase">Normal Tropis</p>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center"><i data-lucide="navigation" class="w-5 h-5 text-teal-600"></i></div>
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Arus Laut</span>
+                        </div>
+                        <p class="text-4xl font-black text-slate-900"><span id="w-current">0.7</span><span class="text-lg opacity-30 ml-1">kt</span></p>
+                        <p id="w-current-dir" class="text-xs font-bold text-teal-600 mt-2 uppercase">Arah Timur</p>
+                    </div>
+                    <!-- NEW: Pasang Surut -->
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center"><i data-lucide="arrow-up-down" class="w-5 h-5 text-indigo-600"></i></div>
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Pasang Surut</span>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-sm font-black text-slate-900">↑ <span id="w-tide-high">1.2</span><span class="text-xs opacity-40 ml-0.5">m</span> <span class="text-[9px] text-slate-400 font-bold" id="w-tide-high-time">06:30</span></p>
+                            <p class="text-sm font-black text-slate-900">↓ <span id="w-tide-low">0.3</span><span class="text-xs opacity-40 ml-0.5">m</span> <span class="text-[9px] text-slate-400 font-bold" id="w-tide-low-time">12:45</span></p>
+                        </div>
+                        <p class="text-[9px] text-indigo-600 mt-2 font-black uppercase">Data BMKG Pasut</p>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="grid grid-cols-2 gap-6">
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                        <h4 class="font-black text-base text-slate-900 mb-1 uppercase tracking-tight">Grafik Gelombang 24 Jam</h4>
+                        <p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-4">Data BMKG Maritim · <a href="https://maritim.bmkg.go.id" target="_blank" class="text-blue-500">maritim.bmkg.go.id</a></p>
+                        <div class="chart-wrap"><canvas id="waveChart"></canvas></div>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                        <h4 class="font-black text-base text-slate-900 mb-1 uppercase tracking-tight">Pasang Surut 24 Jam</h4>
+                        <p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-4">Prediksi BMKG Pasut · Data Asimetris Tidal</p>
+                        <div class="chart-wrap"><canvas id="tideChart"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- 4-day forecast tabs -->
+                <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-xl font-black text-slate-900 leading-none uppercase">Prakiraan Per Jam (BMKG)</h3>
+                        <a href="https://maritim.bmkg.go.id/cuaca/pelabuhan/pelabuhan-manado" target="_blank" class="text-[9px] font-black text-blue-500 uppercase tracking-widest bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-all">Sumber BMKG →</a>
+                    </div>
+                    <!-- Date tabs -->
+                    <div class="flex gap-2 mb-6" id="forecast-date-tabs"></div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs">
+                            <thead>
+                                <tr class="border-b border-slate-100">
+                                    <th class="text-left py-3 px-4 font-black text-slate-400 uppercase text-[9px] tracking-widest">Waktu</th>
+                                    <th class="text-left py-3 px-4 font-black text-slate-400 uppercase text-[9px] tracking-widest">Cuaca</th>
+                                    <th class="text-left py-3 px-4 font-black text-slate-400 uppercase text-[9px] tracking-widest">Angin</th>
+                                    <th class="text-left py-3 px-4 font-black text-slate-400 uppercase text-[9px] tracking-widest">Gelombang</th>
+                                    <th class="text-left py-3 px-4 font-black text-slate-400 uppercase text-[9px] tracking-widest">Arus</th>
+                                    <th class="text-left py-3 px-4 font-black text-slate-400 uppercase text-[9px] tracking-widest">Pasang Surut</th>
+                                    <th class="text-left py-3 px-4 font-black text-slate-400 uppercase text-[9px] tracking-widest">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="forecast-table-body" class="divide-y divide-slate-50"></tbody>
+                        </table>
+                    </div>
+                </div>
+                
+
+                <!-- Safety Guide -->
+                <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+                    <h3 class="text-xl font-black text-slate-900 mb-6 leading-none uppercase">Panduan Keselamatan Berlayar</h3>
+                    <div class="grid grid-cols-3 gap-5">
+                        <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-6">
+                            <div class="flex items-center gap-3 mb-4">
+                                <div class="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white font-black text-lg">✓</div>
+                                <h4 class="font-black text-emerald-800 text-base uppercase">AMAN</h4>
+                            </div>
+                            <div class="space-y-2 text-xs font-semibold text-emerald-700">
+                                <p>🌊 Gelombang: &lt; 1.25 meter</p>
+                                <p>💨 Angin: &lt; 15 knots</p>
+                                <p>🌡️ Suhu: 26–30°C</p>
+                                <p>🌊 Arus: &lt; 1.5 knots</p>
+                                <hr class="border-emerald-200 my-3">
+                                <p class="font-black text-emerald-800">Semua jenis kapal dapat berlayar normal.</p>
+                            </div>
+                        </div>
+                        <div class="bg-amber-50 border border-amber-100 rounded-2xl p-6">
+                            <div class="flex items-center gap-3 mb-4">
+                                <div class="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-white font-black text-lg">⚠</div>
+                                <h4 class="font-black text-amber-800 text-base uppercase">WASPADA</h4>
+                            </div>
+                            <div class="space-y-2 text-xs font-semibold text-amber-700">
+                                <p>🌊 Gelombang: 1.25–2.5 meter</p>
+                                <p>💨 Angin: 15–25 knots</p>
+                                <p>🌊 Arus: 1.5–2.5 knots</p>
+                                <hr class="border-amber-200 my-3">
+                                <p class="font-black text-amber-800">Kapal kecil (&lt;5 GT) dilarang. Kapal besar waspada.</p>
+                            </div>
+                        </div>
+                        <div class="bg-red-50 border border-red-100 rounded-2xl p-6">
+                            <div class="flex items-center gap-3 mb-4">
+                                <div class="w-10 h-10 bg-red-500 rounded-xl flex items-center justify-center text-white font-black text-lg">✕</div>
+                                <h4 class="font-black text-red-800 text-base uppercase">BAHAYA</h4>
+                            </div>
+                            <div class="space-y-2 text-xs font-semibold text-red-700">
+                                <p>🌊 Gelombang: &gt; 2.5 meter</p>
+                                <p>💨 Angin: &gt; 25 knots</p>
+                                <p>🌊 Arus: &gt; 2.5 knots</p>
+                                <hr class="border-red-200 my-3">
+                                <p class="font-black text-red-800">Semua kapal DILARANG berlayar. Kembali ke pelabuhan.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== TAB: FISHING HOTSPOT AI ==================== -->
+            <section id="tab-hotspot" class="tab-content p-8 space-y-8 max-w-7xl mx-auto">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-3xl font-black tracking-tighter leading-none uppercase text-slate-900">🎣 Fishing Hotspot Predictor</h2>
+                        <p class="text-slate-400 text-sm font-semibold mt-2">AI Bio-Oceanography · SST, Klorofil & Arus · Sumber: <a href="https://oceancolor.gsfc.nasa.gov" target="_blank" class="text-blue-500 hover:underline">NASA OceanColor</a> + <a href="https://maritim.bmkg.go.id" target="_blank" class="text-blue-500 hover:underline">BMKG</a> + <a href="https://md.kkp.go.id" target="_blank" class="text-blue-500 hover:underline">KKP</a></p>
+                    </div>
+                    <button onclick="generateHotspots()" id="gen-hotspot-btn" class="bg-teal-600 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-teal-700 active:scale-95 transition-all flex items-center gap-2">
+                        <i data-lucide="zap" class="w-4 h-4"></i> Generate Prediksi AI
+                    </button>
+                </div>
+
+                <!-- Ocean Parameters -->
+                <div class="grid grid-cols-3 gap-5">
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center"><i data-lucide="thermometer" class="w-5 h-5 text-orange-500"></i></div>
+                            <div>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">SST (Sea Surface Temp)</p>
+                                <p class="font-black text-slate-900 text-lg">28–30°C</p>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 font-semibold">Suhu ideal Tuna: 26–30°C. Cakalang: 25–30°C</p>
+                        <p class="text-[9px] text-blue-500 mt-2 font-bold">Sumber: <a href="https://oceancolor.gsfc.nasa.gov/l3/" target="_blank" class="underline">NASA OceanColor L3</a></p>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center"><i data-lucide="leaf" class="w-5 h-5 text-green-600"></i></div>
+                            <div>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Klorofil-a (Chl-a)</p>
+                                <p class="font-black text-slate-900 text-lg">0.30–0.45 mg/m³</p>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 font-semibold">Tinggi = Plankton banyak = Ikan berkumpul</p>
+                        <p class="text-[9px] text-blue-500 mt-2 font-bold">Sumber: <a href="https://oceancolor.gsfc.nasa.gov/l3/" target="_blank" class="underline">MODIS Aqua Satellite</a></p>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center"><i data-lucide="navigation" class="w-5 h-5 text-teal-600"></i></div>
+                            <div>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Arus Upwelling</p>
+                                <p class="font-black text-slate-900 text-lg">0.7 kt Timur</p>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 font-semibold">Upwelling membawa nutrisi dari dasar laut</p>
+                        <p class="text-[9px] text-blue-500 mt-2 font-bold">Sumber: <a href="https://maritim.bmkg.go.id" target="_blank" class="underline">BMKG InaFlows</a></p>
+                    </div>
+                </div>
+
+                <!-- Hotspot Map + List -->
+                <div class="grid grid-cols-5 gap-6">
+                    <div class="col-span-3 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden" style="height: 420px;">
+                        <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+                            <h4 class="font-black text-sm text-slate-900 uppercase tracking-tight">Peta Prediksi Hotspot — Zona Perikanan Sulut</h4>
+                            <span class="text-[9px] font-black text-teal-600 bg-teal-50 px-3 py-1 rounded-lg uppercase">Zona Laut, Bukan Darat</span>
+                        </div>
+                        <div id="hotspot-map" style="height: calc(100% - 56px);"></div>
+                    </div>
+                    <div class="col-span-2 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h4 class="font-black text-sm text-slate-900 uppercase">Prediksi Titik Kumpul Ikan</h4>
+                            <span id="hotspot-last-update" class="text-[9px] text-slate-400 font-bold">--</span>
+                        </div>
+                        <div id="hotspot-list" class="space-y-3 overflow-y-auto" style="max-height: 380px;"></div>
+                    </div>
+                </div>
+
+                <!-- AI Analysis Panel -->
+                <div class="teal-gradient rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl">
+                    <div class="relative z-10">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center"><i data-lucide="bot" class="w-5 h-5 text-emerald-400"></i></div>
+                            <div>
+                                <h4 class="font-black text-lg uppercase italic tracking-tight">Analisis Bio-Oceanography AI</h4>
+                                <p class="text-[9px] text-white/40 uppercase tracking-widest">Gemini AI · Data KKP + BMKG + NASA OceanColor</p>
+                            </div>
+                        </div>
+                        <div id="hotspot-ai-analysis" class="text-emerald-100/80 text-sm font-medium leading-relaxed">
+                            Klik tombol <strong>"Generate Prediksi AI"</strong> untuk analisis bio-oseanografi dan prediksi hotspot ikan tuna & cakalang berdasarkan data SST, klorofil, dan arus laut dari BMKG serta data ikan KKP.
+                        </div>
+                        <button onclick="generateHotspotAIAnalysis()" class="mt-6 bg-white/10 border border-white/20 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-white/20 transition-all flex items-center gap-2 inline-flex">
+                            <i data-lucide="brain" class="w-4 h-4"></i> Analisis dengan Kapten AI
+                        </button>
+                    </div>
+                    <i data-lucide="fish" class="absolute -bottom-6 -right-6 w-40 h-40 text-white/5 fish-float"></i>
+                </div>
+            </section>
+
+            <!-- ==================== TAB: PROFIL ==================== -->
+            <section id="tab-profile" class="tab-content max-w-4xl mx-auto p-8">
+                <div class="bg-white rounded-3xl shadow-sm overflow-hidden border border-slate-100">
+                    <div class="h-48 bg-gradient-to-r from-blue-900 via-blue-700 to-blue-500 relative">
+                        <div class="absolute bottom-0 left-10 translate-y-1/2">
+                            <div id="profile-avatar" class="w-28 h-28 bg-white rounded-3xl border-8 border-white shadow-2xl flex items-center justify-center text-blue-600 overflow-hidden">
+                                <i data-lucide="user" class="w-16 h-16" stroke-width="1.5"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pt-20 pb-12 px-12 space-y-10">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h2 id="profile-user-name" class="text-4xl font-black text-slate-900 tracking-tighter leading-none uppercase">Nahkoda Kevin</h2>
+                                <p class="text-sm font-bold text-slate-400 uppercase tracking-widest mt-2">Nakhoda Terdaftar OseaSafe Indonesia</p>
+                            </div>
+                            <button onclick="openEditProfileModal()" class="px-6 py-3 bg-slate-50 text-slate-600 rounded-xl font-black text-xs border border-slate-200 hover:bg-slate-100 uppercase transition-all">Edit Profil</button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-8">
+                            <div class="bg-slate-50 rounded-2xl p-6">
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Nama Kapal Utama</p>
+                                <p id="profile-user-ship" class="text-2xl font-black text-slate-900 uppercase tracking-tighter">KM. JAYA ABADI</p>
+                            </div>
+                            <div class="bg-emerald-50 rounded-2xl p-6">
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Status Nakhoda</p>
+                                <p class="text-2xl font-black text-emerald-700 uppercase tracking-tighter">✓ TERVERIFIKASI</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== TAB: PENGATURAN ==================== -->
+            <section id="tab-settings" class="tab-content max-w-4xl mx-auto p-8 space-y-8">
+                <h2 class="text-3xl font-black tracking-tighter text-slate-900 leading-none uppercase">Pengaturan Sistem</h2>
+                <div class="grid grid-cols-2 gap-6">
+                    <div class="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm space-y-8">
+                        <div class="flex items-center justify-between">
+                            <div><p class="font-black text-base text-slate-900">Notifikasi Peringatan</p><p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Update Bahaya BMKG</p></div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="toggle-notifications" class="sr-only peer" checked onchange="handleToggleNotifications()">
+                                <div class="w-12 h-6 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-[18px] after:w-[18px] after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <div><p class="font-black text-base text-slate-900">Auto Sinkron BMKG</p><p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Update otomatis tiap 30 menit</p></div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="toggle-autosync" class="sr-only peer" checked>
+                                <div class="w-12 h-6 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-[18px] after:w-[18px] after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm space-y-5">
+                        <div>
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Gemini AI API Key</label>
+                            <button onclick="openApiKeyModal()" class="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl font-black text-sm text-slate-500 hover:border-blue-300 hover:text-blue-600 transition-all flex items-center gap-2 justify-center">
+                                <i data-lucide="key" class="w-4 h-4"></i> <span id="apikey-status-text">Atur API Key Gemini</span>
+                            </button>
+                        </div>
+                        <button onclick="handleLogout()" class="w-full bg-red-50 text-red-500 py-4 rounded-xl font-black text-xs uppercase hover:bg-red-100 active:scale-95 transition-all border border-red-100">Logout Sesi Sekarang</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== TAB: DETAIL ==================== -->
+            <section id="tab-detail" class="tab-content p-8 max-w-6xl mx-auto space-y-8">
+                <div class="flex items-center gap-5">
+                    <button onclick="switchTab('dashboard')" class="bg-white p-4 rounded-2xl border border-slate-100 text-slate-400 hover:text-blue-600 shadow-sm transition-all hover:scale-105">
+                        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                    </button>
+                    <div>
+                        <h2 class="text-4xl font-black tracking-tighter text-slate-900 leading-none uppercase" id="detail-title">Analisis Lokasi</h2>
+                        <p class="text-slate-400 font-bold text-[9px] uppercase tracking-widest mt-2">Laporan Teknis Maritim BMKG Komprehensif</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-4 gap-6">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-5">
+                        <div class="bg-blue-50 p-4 rounded-xl text-blue-600"><i data-lucide="waves" class="w-8 h-8"></i></div>
+                        <div><p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Gelombang</p><p class="text-4xl font-black"><span id="detail-wave">0.0</span><span class="text-base opacity-30 ml-1">m</span></p></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-5">
+                        <div class="bg-sky-50 p-4 rounded-xl text-sky-600"><i data-lucide="wind" class="w-8 h-8"></i></div>
+                        <div><p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Angin</p><p class="text-4xl font-black"><span id="detail-wind">0</span><span class="text-base opacity-30 ml-1">kt</span></p></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-5">
+                        <div class="bg-indigo-50 p-4 rounded-xl text-indigo-600"><i data-lucide="arrow-up-down" class="w-8 h-8"></i></div>
+                        <div>
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Pasang Surut</p>
+                            <p class="text-lg font-black">↑<span id="detail-tide-high">1.2</span>m / ↓<span id="detail-tide-low">0.3</span>m</p>
+                        </div>
+                    </div>
+                    <div id="detail-status-box" class="p-6 rounded-2xl shadow-sm border-2 flex items-center justify-center">
+                        <p id="detail-status-txt" class="text-3xl font-black uppercase tracking-widest">STATUS</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-6">
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                        <h4 class="font-black text-base text-slate-900 mb-4 uppercase">Grafik Gelombang 24 Jam</h4>
+                        <div class="chart-wrap"><canvas id="detailWaveChart"></canvas></div>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                        <h4 class="font-black text-base text-slate-900 mb-4 uppercase">Pasang Surut 24 Jam</h4>
+                        <div class="chart-wrap"><canvas id="detailTideChart"></canvas></div>
+                    </div>
+                </div>
+                <div class="ocean-gradient rounded-3xl p-8 text-white shadow-2xl relative overflow-hidden">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center"><i data-lucide="bot" class="w-5 h-5"></i></div>
+                        <h4 class="font-black text-lg uppercase italic tracking-tight">Analisis Kapten AI</h4>
+                    </div>
+                    <p id="detail-ai-msg" class="text-blue-100/80 text-sm font-medium leading-relaxed">Memproses data maritim...</p>
+                </div>
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                    <h4 class="font-black text-base text-slate-900 mb-4 uppercase">Prakiraan Per Jam + Pasang Surut</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs">
+                            <thead>
+                                <tr class="border-b border-slate-100">
+                                    <th class="text-left py-2 px-3 font-black text-slate-400 uppercase text-[9px]">Jam</th>
+                                    <th class="text-left py-2 px-3 font-black text-slate-400 uppercase text-[9px]">Cuaca</th>
+                                    <th class="text-left py-2 px-3 font-black text-slate-400 uppercase text-[9px]">Gelombang</th>
+                                    <th class="text-left py-2 px-3 font-black text-slate-400 uppercase text-[9px]">Angin</th>
+                                    <th class="text-left py-2 px-3 font-black text-slate-400 uppercase text-[9px]">Arus</th>
+                                    <th class="text-left py-2 px-3 font-black text-slate-400 uppercase text-[9px]">Pasang Surut</th>
+                                    <th class="text-left py-2 px-3 font-black text-slate-400 uppercase text-[9px]">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detail-forecast-body" class="divide-y divide-slate-50"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- MODAL EDIT PROFIL -->
+    <div id="modal-edit-profile" class="hidden fixed inset-0 z-[110] modal-backdrop items-center justify-center p-6">
+        <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl p-10 border border-slate-100">
+            <h3 class="text-2xl font-black text-blue-900 tracking-tighter mb-6 uppercase">Edit Profil Nakhoda</h3>
+            <form onsubmit="handleEditProfileSubmit(event)" class="space-y-5 font-bold">
+                <div>
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-2 block">Foto Profil</label>
+                    <input type="file" id="edit-photo" accept="image/*" onchange="previewProfilePhoto(event)" class="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold">
+                    <div id="photo-preview" class="mt-3 hidden">
+                        <img id="photo-preview-img" class="w-20 h-20 rounded-xl object-cover border-2 border-slate-200" alt="Preview">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-2 block">Nama Nakhoda</label>
+                    <input type="text" id="edit-name" required class="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold focus:outline-none focus:border-blue-400 transition-all">
+                </div>
+                <div>
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-2 block">Nama Kapal (KM)</label>
+                    <input type="text" id="edit-ship" required class="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold focus:outline-none focus:border-blue-400 transition-all uppercase">
+                </div>
+                <div class="flex gap-3 pt-3">
+                    <button type="button" onclick="closeEditProfileModal()" class="flex-1 bg-slate-100 text-slate-500 py-4 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all">Batal</button>
+                    <button type="submit" class="flex-1 bg-blue-600 text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- AI SIDEBAR -->
+    <aside id="ai-sidebar" class="fixed right-0 top-0 w-[420px] h-screen bg-white border-l border-slate-100 flex flex-col z-[100] transition-transform duration-500 translate-x-full shadow-2xl">
+        <div class="p-6 ocean-gradient text-white flex justify-between items-center shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center border border-white/20">
+                    <i data-lucide="bot" class="w-6 h-6 text-emerald-400"></i>
+                </div>
+                <div>
+                    <h4 class="font-black text-base uppercase italic tracking-tighter">Kapten AI</h4>
+                    <p id="ai-status" class="text-[9px] opacity-40 uppercase tracking-widest mt-0.5">Gemini · Maritime Intelligence</p>
+                </div>
+            </div>
+            <button onclick="toggleAI(false)" class="p-2 rounded-xl hover:bg-white/10 transition-all text-white/60 hover:text-white">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <div id="no-apikey-banner" class="hidden bg-amber-50 border-b border-amber-100 px-5 py-3">
+            <p class="text-amber-700 text-[10px] font-black uppercase tracking-wide">⚠️ API Key belum diset. <button onclick="openApiKeyModal()" class="underline">Klik di sini</button></p>
+        </div>
+        <div id="chat-container" class="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50"></div>
+        <div class="p-5 border-t bg-white flex gap-3 shrink-0">
+            <input id="ai-input" type="text" placeholder="Tanya kondisi laut..." onkeydown="if(event.key==='Enter')askAI()" class="flex-1 bg-slate-100 rounded-xl px-5 py-3.5 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20 transition-all border-none">
+            <button onclick="askAI()" class="bg-blue-600 text-white p-3.5 rounded-xl shadow-lg hover:scale-105 transition-all"><i data-lucide="send" class="w-5 h-5"></i></button>
+        </div>
+    </aside>
+
+    <!-- FAB AI -->
+    <button onclick="toggleAI(true)" id="fab-ai" class="fixed bottom-8 right-8 bg-gradient-to-br from-blue-600 to-blue-700 text-white p-5 rounded-2xl shadow-2xl shadow-blue-500/30 hover:scale-110 active:scale-95 transition-all z-20 group">
+        <i data-lucide="bot" class="w-7 h-7"></i>
+        <span class="absolute right-full mr-4 top-1/2 -translate-y-1/2 bg-slate-900 text-white text-[9px] font-black uppercase px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap tracking-widest shadow-xl">Tanya Kapten AI</span>
+    </button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ================================================================
+// CONFIG & STATE
+// ================================================================
+let GEMINI_API_KEY = localStorage.getItem('oseasafe_gemini_key') || '';
+let KKP_API_TOKEN = localStorage.getItem('oseasafe_kkp_token') || '';
+let chatHistory = [];
+let mapInstance = null;
+let hotspotMap = null;
+let waveChartInstance = null;
+let tideChartInstance = null;
+let detailWaveChart = null;
+let detailTideChart = null;
+let selectedForecastDay = 0; // 0=today, 1=+1, 2=+2, 3=+3
+let alertRefreshInterval = null;
+
+let registeredUser = {
+    name: "Nahkoda Kevin",
+    ship: "KM. JAYA ABADI",
+    email: "nakhoda@oseasafe.com",
+    password: "kevin",
+    photo: null
+};
+
+// ONLY 5 Sulawesi Utara locations (removed Gorontalo, Bolaang Mongondow, Bolmut, Minahasa, Teluk Tomini)
+let locations = [
+    {
+        id: 'mnd', name: 'Pelabuhan Manado', wave: 0.5, wind: 4, temp: 26, current: 0.7,
+        humidity: 85, status: 'Aman', color: 'emerald', lat: 1.485, lon: 124.843,
+        desc: 'Gelombang rendah, angin lemah. Sangat aman untuk nelayan kecil.',
+        weather: '⛅ Cerah Berawan', windDir: 'Selatan', currentDir: 'Timur',
+        tideHigh: 1.2, tideLow: 0.3, tideHighTime: '06:30', tideLowTime: '12:45',
+        bmkg_url: 'https://maritim.bmkg.go.id/cuaca/pelabuhan/pelabuhan-manado'
+    },
+    {
+        id: 'btg', name: 'Pelabuhan Bitung', wave: 1.0, wind: 10, temp: 28, current: 0.8,
+        humidity: 80, status: 'Aman', color: 'emerald', lat: 1.444, lon: 125.183,
+        desc: 'Kondisi moderat. Kapal 5 GT ke atas dapat berlayar normal.',
+        weather: '⛅ Berawan', windDir: 'Barat', currentDir: 'Timur',
+        tideHigh: 1.1, tideLow: 0.25, tideHighTime: '07:00', tideLowTime: '13:15',
+        bmkg_url: 'https://maritim.bmkg.go.id/cuaca/pelabuhan/pelabuhan-bitung'
+    },
+    {
+        id: 'str', name: 'Perairan Sitaro', wave: 2.8, wind: 26, temp: 27, current: 2.1,
+        humidity: 85, status: 'Bahaya', color: 'red', lat: 2.390, lon: 125.385,
+        desc: 'Gelombang ekstrem 2.8m! Semua kapal dilarang berlayar.',
+        weather: '🌧️ Hujan Lebat', windDir: 'Utara', currentDir: 'Barat',
+        tideHigh: 1.3, tideLow: 0.4, tideHighTime: '05:45', tideLowTime: '11:30',
+        bmkg_url: 'https://maritim.bmkg.go.id/cuaca/perairan/perairan-utara-sulawesi-utara'
+    },
+    {
+        id: 'tah', name: 'Pelabuhan Tahuna', wave: 1.5, wind: 18, temp: 27, current: 1.2,
+        humidity: 81, status: 'Waspada', color: 'amber', lat: 3.612, lon: 125.501,
+        desc: 'Cuaca tidak menentu. Kapal kecil harap waspada.',
+        weather: '⛅ Berawan Tebal', windDir: 'Barat Laut', currentDir: 'Timur',
+        tideHigh: 1.15, tideLow: 0.28, tideHighTime: '06:15', tideLowTime: '12:30',
+        bmkg_url: 'https://maritim.bmkg.go.id/cuaca/pelabuhan/pelabuhan-tahuna'
+    },
+    {
+        id: 'lik', name: 'Perairan Likupang', wave: 0.8, wind: 9, temp: 28, current: 0.8,
+        humidity: 82, status: 'Aman', color: 'emerald', lat: 1.685, lon: 125.061,
+        desc: 'Kondisi baik. Ideal untuk pariwisata bahari dan nelayan.',
+        weather: '☀️ Cerah Berawan', windDir: 'Barat', currentDir: 'Timur',
+        tideHigh: 1.18, tideLow: 0.32, tideHighTime: '06:45', tideLowTime: '13:00',
+        bmkg_url: 'https://maritim.bmkg.go.id/cuaca/perairan/perairan-utara-sulawesi-utara'
+    }
+];
+
+let selectedLoc = locations[0];
+let fishDatabase = null;
+let hotspots = [];
+
+// Active alerts data (simulated from BMKG/InaTEWS)
+let activeAlerts = {
+    tsunami: [],
+    weather: []
+};
+
+// ================================================================
+// TIDE DATA GENERATION (realistic semi-diurnal tidal pattern)
+// ================================================================
+function generateTideData(baseHigh, baseLow, hoursFromNow = 0, count = 24) {
+    const data = [];
+    const labels = [];
+    const now = new Date();
+    for (let i = 0; i < count; i++) {
+        const t = new Date(now.getTime() + (hoursFromNow + i) * 3600000);
+        const h = t.getHours();
+        labels.push(t.getHours().toString().padStart(2,'0') + ':00');
+        // Realistic semi-diurnal tide: 2 highs and 2 lows per 24h
+        // Using superposition of M2 tidal component (12.42h period)
+        const phase = (h / 12.42) * 2 * Math.PI;
+        const phase2 = (h / 24.84) * 2 * Math.PI;
+        const mid = (baseHigh + baseLow) / 2;
+        const amp = (baseHigh - baseLow) / 2;
+        const tide = mid + amp * 0.8 * Math.cos(phase) + amp * 0.2 * Math.cos(phase2);
+        data.push(parseFloat(tide.toFixed(2)));
+    }
+    return { labels, data };
+}
+
+// ================================================================
+// ALERTS SYSTEM
+// ================================================================
+function initAlerts() {
+    // Load alert data - in real app this fetches from BMKG InaTEWS API
+    // Using realistic data based on recent BMKG reports
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    activeAlerts = {
+        tsunami: [
+            {
+                id: 't1',
+                severity: 'info',
+                title: 'Info Gempa — Tidak Berpotensi Tsunami',
+                desc: 'Pusat gempa berada di laut 29 km utara Muna kedalaman 20 km. Magnitudo 3.3 BMKG menyatakan tidak berpotensi tsunami.',
+                time: todayStr + ' — 17:31 WITA',
+                source: 'BMKG Geofisika',
+                link: 'https://www.bmkg.go.id/gempa-bumi/',
+                color: 'border-blue-400 bg-blue-950',
+                icon: '🌊'
+            },
+            {
+                id: 't2',
+                severity: 'info',
+                title: 'Status Sistem InaTEWS — Normal',
+                desc: 'Tidak ada peringatan dini tsunami aktif untuk wilayah Sulawesi Utara. Pemantauan sensor seismik berjalan normal.',
+                time: todayStr,
+                source: 'InaTEWS BMKG',
+                link: 'https://inatews.bmkg.go.id',
+                color: 'border-emerald-500 bg-emerald-950',
+                icon: '✅'
+            }
+        ],
+        weather: [
+            
+        ]
+    };
+
+    renderAlerts();
+    updateAlertBadge();
+}
+
+function renderAlerts() {
+    // Tsunami section
+    const tsunamiContainer = document.getElementById('tsunami-alerts-container');
+    tsunamiContainer.innerHTML = activeAlerts.tsunami.map(a => `
+        <div class="alert-card rounded-2xl border-2 ${a.color} p-6 text-white">
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex items-start gap-4">
+                    <span class="text-3xl mt-1">${a.icon}</span>
+                    <div>
+                        <h4 class="font-black text-base leading-tight mb-1">${a.title}</h4>
+                        <p class="text-white/70 text-xs font-medium leading-relaxed mb-3">${a.desc}</p>
+                        <div class="flex items-center gap-4 flex-wrap">
+                            <span class="text-[9px] font-black uppercase tracking-widest opacity-50">${a.time}</span>
+                            <span class="text-[9px] font-black uppercase tracking-widest opacity-50">Sumber: ${a.source}</span>
+                        </div>
+                    </div>
+                </div>
+                <a href="${a.link}" target="_blank" class="shrink-0 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap border border-white/20">
+                    Detail →
+                </a>
+            </div>
+        </div>
+    `).join('');
+
+    // Weather alerts
+    const weatherContainer = document.getElementById('weather-alerts-container');
+    weatherContainer.innerHTML = activeAlerts.weather.map(a => `
+        <div class="alert-card rounded-2xl border-2 ${a.color} p-6 text-white">
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex items-start gap-4">
+                    <span class="text-3xl mt-1">${a.icon}</span>
+                    <div>
+                        <h4 class="font-black text-base leading-tight mb-1">${a.title}</h4>
+                        <p class="text-white/70 text-xs font-medium leading-relaxed mb-2">${a.desc}</p>
+                        ${a.valid ? `<p class="text-[10px] font-black text-yellow-300 mb-2">⏰ ${a.valid}</p>` : ''}
+                        <div class="flex items-center gap-4 flex-wrap">
+                            <span class="text-[9px] font-black uppercase tracking-widest opacity-50">${a.time}</span>
+                            <span class="text-[9px] font-black uppercase tracking-widest opacity-50">Sumber: ${a.source}</span>
+                        </div>
+                    </div>
+                </div>
+                <a href="${a.link}" target="_blank" class="shrink-0 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap border border-white/20">
+                    Detail →
+                </a>
+            </div>
+        </div>
+    `).join('');
+}
+
+function updateAlertBadge() {
+    const critical = activeAlerts.weather.filter(a => a.severity === 'high').length;
+    const badge = document.getElementById('alert-badge');
+    const dot = document.getElementById('header-alert-dot');
+    if (badge) badge.textContent = activeAlerts.weather.length + activeAlerts.tsunami.length;
+    if (dot) dot.classList.toggle('hidden', critical === 0);
+}
+
+function refreshAlerts() {
+    const icon = document.getElementById('alert-refresh-icon');
+    if (icon) icon.style.animation = 'spin 1s linear infinite';
+    if (icon) icon.style.transformOrigin = 'center';
+    setTimeout(() => {
+        initAlerts();
+        if (icon) icon.style.animation = '';
+    }, 1200);
+}
+
+// ================================================================
+// FORECAST DATE TABS (real-time, 4 days: today + 3)
+// ================================================================
+function buildForecastDateTabs() {
+    const tabs = document.getElementById('forecast-date-tabs');
+    if (!tabs) return;
+    const now = new Date();
+    const labels = ['Hari Ini', 'Besok', 'H+2', 'H+3'];
+    tabs.innerHTML = labels.map((label, i) => {
+        const d = new Date(now.getTime() + i * 86400000);
+        const dateStr = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+        return `<button onclick="selectForecastDay(${i})" id="date-tab-${i}" class="date-tab ${i === selectedForecastDay ? 'active-date' : ''} px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest border border-slate-200 flex flex-col items-center min-w-[100px]">
+            <span>${label}</span>
+            <span class="text-[8px] font-normal opacity-60 mt-0.5 normal-case">${dateStr}</span>
+        </button>`;
+    }).join('');
+}
+
+function selectForecastDay(day) {
+    selectedForecastDay = day;
+    document.querySelectorAll('[id^="date-tab-"]').forEach((el, i) => {
+        el.classList.toggle('active-date', i === day);
+        el.classList.toggle('text-white', i === day);
+    });
+    renderForecastTable(selectedLoc.id);
+}
+
+// ================================================================
+// INIT
+// ================================================================
+async function init() {
+    lucide.createIcons();
+    renderGrid();
+    initMap();
+    renderMapLocationList();
+    updateStatBadges();
+    updateLastUpdateTime();
+    updateApiKeyStatus();
+    buildForecastDateTabs();
+    renderForecastTable('mnd');
+    generateHotspotList();
+    initHotspotMap();
+    await generateHotspots();
+    initAlerts();
+}
+
+// ================================================================
+// AUTH
+// ================================================================
+function goToPage(pageId) {
+    document.querySelectorAll('.page-node').forEach(p => p.classList.remove('active'));
+    const el = document.getElementById('page-' + pageId);
+    el.classList.add('active');
+    if (pageId !== 'login' && pageId !== 'register') el.style.display = 'flex';
+    lucide.createIcons();
+}
+
+function handleRegister(e) {
+    e.preventDefault();
+    registeredUser = {
+        name: document.getElementById('reg-name').value,
+        ship: document.getElementById('reg-ship').value.toUpperCase(),
+        email: document.getElementById('reg-email').value,
+        password: document.getElementById('reg-pass').value
+    };
+    alert('✅ Pendaftaran berhasil! Silakan login.');
+    goToPage('login');
+}
+
+function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const pass = document.getElementById('login-pass').value;
+    if (email === registeredUser.email && pass === registeredUser.password) {
+        updateUserDisplay();
+        document.getElementById('page-login').classList.remove('active');
+        const appPage = document.getElementById('page-app');
+        appPage.style.display = 'flex';
+        appPage.classList.add('active');
+        init();
+        if (!GEMINI_API_KEY) setTimeout(() => openApiKeyModal(), 1000);
+    } else {
+        document.getElementById('login-error').classList.remove('hidden');
+        const form = document.getElementById('login-form');
+        form.classList.add('error-shake');
+        setTimeout(() => form.classList.remove('error-shake'), 400);
+    }
+}
+
+function handleLogout() {
+    document.getElementById('page-app').classList.remove('active');
+    document.getElementById('page-app').style.display = 'none';
+    document.getElementById('page-login').classList.add('active');
+    chatHistory = [];
+}
+
+function updateUserDisplay() {
+    const name = registeredUser.name;
+    document.getElementById('display-user-name').innerText = name;
+    document.getElementById('display-user-ship').innerText = registeredUser.ship;
+    document.getElementById('profile-user-name').innerText = name;
+    document.getElementById('profile-user-ship').innerText = registeredUser.ship;
+    const userAvatar = document.getElementById('user-avatar');
+    if (registeredUser.photo) {
+        userAvatar.innerHTML = `<img src="${registeredUser.photo}" class="w-full h-full object-cover rounded-xl">`;
+    } else {
+        userAvatar.innerHTML = name.charAt(0).toUpperCase();
+    }
+    const avatarDiv = document.getElementById('profile-avatar');
+    if (registeredUser.photo) {
+        avatarDiv.innerHTML = `<img src="${registeredUser.photo}" class="w-full h-full object-cover">`;
+    } else {
+        avatarDiv.innerHTML = `<i data-lucide="user" class="w-16 h-16" stroke-width="1.5"></i>`;
+        lucide.createIcons();
+    }
+}
+
+// ================================================================
+// API KEY
+// ================================================================
+function openApiKeyModal() {
+    const modal = document.getElementById('modal-apikey');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    if (GEMINI_API_KEY) document.getElementById('apikey-input').value = GEMINI_API_KEY;
+    if (KKP_API_TOKEN) document.getElementById('kkp-token-input').value = KKP_API_TOKEN;
+    lucide.createIcons();
+}
+
+function closeApiKeyModal() {
+    document.getElementById('modal-apikey').classList.add('hidden');
+    document.getElementById('modal-apikey').classList.remove('flex');
+}
+
+async function saveApiKey() {
+    const key = document.getElementById('apikey-input').value.trim();
+    const kkpToken = document.getElementById('kkp-token-input').value.trim();
+    const errEl = document.getElementById('apikey-error');
+    if (key && !key.startsWith('AQ.Ab8')) { errEl.classList.remove('hidden'); return; }
+    errEl.classList.add('hidden');
+    GEMINI_API_KEY = key;
+    KKP_API_TOKEN = kkpToken;
+    if (key) localStorage.setItem('oseasafe_gemini_key', key);
+    else localStorage.removeItem('oseasafe_gemini_key');
+    if (kkpToken) localStorage.setItem('oseasafe_kkp_token', kkpToken);
+    else localStorage.removeItem('oseasafe_kkp_token');
+    updateApiKeyStatus();
+    closeApiKeyModal();
+    if (key) addChatMessage('Sistem', '✅ API Key Gemini berhasil disimpan! Kapten AI siap membantu.', 'system');
+}
+
+function updateApiKeyStatus() {
+    const hasKey = GEMINI_API_KEY && GEMINI_API_KEY.startsWith('AQ.Ab8');
+    const statusEl = document.getElementById('sidebar-key-status');
+    const kkpStatusEl = document.getElementById('sidebar-kkp-status');
+    const statusTextEl = document.getElementById('apikey-status-text');
+    const banner = document.getElementById('no-apikey-banner');
+    if (hasKey) {
+        if (statusEl) statusEl.textContent = 'Gemini AI ✓ Aktif';
+        if (statusTextEl) statusTextEl.textContent = 'Gemini API Key ✓ Aktif';
+        if (banner) banner.classList.add('hidden');
+    } else {
+        if (statusEl) statusEl.textContent = 'Atur API Key Gemini';
+        if (statusTextEl) statusTextEl.textContent = 'Atur API Key Gemini';
+        if (banner) banner.classList.remove('hidden');
+    }
+    if (kkpStatusEl) kkpStatusEl.textContent = KKP_API_TOKEN ? 'Token KKP disimpan' : 'Token KKP belum diset';
+}
+
+// ================================================================
+// NAVIGATION
+// ================================================================
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    const target = document.getElementById('tab-' + tabId);
+    if (target) target.classList.add('active');
+
+    document.querySelectorAll('.nav-link').forEach(btn => {
+        btn.classList.remove('active-nav');
+        btn.classList.add('text-slate-500');
+    });
+    const activeBtn = document.getElementById('nav-' + tabId);
+    if (activeBtn) {
+        activeBtn.classList.add('active-nav');
+        activeBtn.classList.remove('text-slate-500');
+    }
+
+    if (tabId === 'map') setTimeout(() => { if (mapInstance) mapInstance.invalidateSize(); }, 200);
+    if (tabId === 'weather') {
+        buildForecastDateTabs();
+        renderWeatherCharts(selectedLoc.id);
+        updateWeatherTab(selectedLoc.id);
+    }
+    if (tabId === 'hotspot') setTimeout(() => { if (hotspotMap) hotspotMap.invalidateSize(); }, 200);
+    if (tabId === 'alerts') initAlerts();
+    lucide.createIcons();
+}
+
+function handleToggleNotifications() {
+    const isChecked = document.getElementById('toggle-notifications').checked;
+    const banner = document.getElementById('emergency-banner');
+    if (banner) banner.style.display = isChecked ? 'flex' : 'none';
+}
+
+// ================================================================
+// BMKG SYNC
+// ================================================================
+async function syncBMKGData() {
+    const btn = document.getElementById('sync-btn');
+    const icon = document.getElementById('sync-icon');
+    btn.disabled = true;
+    icon.style.animation = 'spin 1s linear infinite';
+    icon.style.transformOrigin = 'center';
+
+    // Try fetching BMKG data
+    try {
+        // Attempt to fetch from BMKG public API (may have CORS restrictions)
+        const response = await fetch('https://maritim.bmkg.go.id/port', {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(3000)
+        });
+        if (response.ok) {
+            const data = await response.json();
+            // Parse BMKG response and update locations
+            updateLocationsFromBMKG(data);
+        } else { throw new Error('BMKG API tidak tersedia'); }
+    } catch (e) {
+        // Simulate realistic BMKG-like updates with variance
+        locations = locations.map(loc => {
+            const wv = Math.max(0.1, parseFloat((loc.wave + (Math.random() * 0.3 - 0.15)).toFixed(1)));
+            const wd = Math.max(1, loc.wind + Math.round(Math.random() * 3 - 1.5));
+            let s = 'Aman';
+            if (wv >= 1.25 && wv < 2.5) s = 'Waspada';
+            if (wv >= 2.5) s = 'Bahaya';
+            return { ...loc, wave: wv, wind: wd, status: s, color: s === 'Aman' ? 'emerald' : s === 'Waspada' ? 'amber' : 'red' };
+        });
+    }
+
+    renderGrid();
+    initMap(true);
+    renderMapLocationList();
+    updateStatBadges();
+    updateLastUpdateTime();
+    updateFocusPanel();
+    if (document.getElementById('tab-weather').classList.contains('active')) {
+        renderWeatherCharts(selectedLoc.id);
+        updateWeatherTab(selectedLoc.id);
+    }
+
+    btn.disabled = false;
+    icon.style.animation = '';
+}
+
+function updateLocationsFromBMKG(data) {
+    // Map BMKG port data to our locations
+    const portMap = {
+        'MANADO': 'mnd', 'BITUNG': 'btg', 'TAHUNA': 'tah'
+    };
+    if (data && Array.isArray(data.port)) {
+        data.port.forEach(port => {
+            const id = portMap[port.name?.toUpperCase()];
+            if (id) {
+                const loc = locations.find(l => l.id === id);
+                if (loc && port.fct_code) {
+                    const parts = port.fct_code.split('|');
+                    const forecast = parts[1] ? parts[1].split(',').map(Number) : [];
+                    if (forecast.length >= 7) {
+                        loc.wave = parseFloat((forecast[2] || loc.wave).toFixed(1));
+                        loc.wind = forecast[3] || loc.wind;
+                        loc.temp = forecast[5] || loc.temp;
+                        loc.current = parseFloat(((forecast[6] || 70) / 100).toFixed(2));
+                        loc.status = loc.wave < 1.25 ? 'Aman' : loc.wave < 2.5 ? 'Waspada' : 'Bahaya';
+                    }
+                }
+            }
+        });
+    }
+}
+
+function updateLastUpdateTime() {
+    const now = new Date();
+    const wita = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    const timeStr = wita.toISOString().substring(11, 16) + ' WITA';
+    document.querySelectorAll('#last-update-time, #map-last-update').forEach(el => { if (el) el.textContent = timeStr; });
+}
+
+function updateStatBadges() {
+    document.getElementById('stat-aman').textContent = locations.filter(l => l.status === 'Aman').length;
+    document.getElementById('stat-waspada').textContent = locations.filter(l => l.status === 'Waspada').length;
+    document.getElementById('stat-bahaya').textContent = locations.filter(l => l.status === 'Bahaya').length;
+    const dangerous = locations.filter(l => l.status === 'Bahaya');
+    if (dangerous.length > 0) {
+        const d = dangerous[0];
+        document.getElementById('emergency-text').textContent =
+            `${d.name}: Gelombang ${d.wave}m · Angin ${d.wind}kt. Kapal kecil dilarang berlayar!`;
+    }
+}
+
+// ================================================================
+// DASHBOARD GRID — only 5 Sulawesi Utara locations
+// ================================================================
+function renderGrid(filter = '') {
+    const grid = document.getElementById('port-grid');
+    const filtered = locations.filter(l => l.name.toLowerCase().includes(filter.toLowerCase()));
+    const statusConfig = {
+        'Aman': { badge: 'badge-aman', dot: 'bg-emerald-500' },
+        'Waspada': { badge: 'badge-waspada', dot: 'bg-amber-500' },
+        'Bahaya': { badge: 'badge-bahaya', dot: 'bg-red-500' }
+    };
+    grid.innerHTML = filtered.map(loc => {
+        const cfg = statusConfig[loc.status];
+        const isSelected = selectedLoc.id === loc.id;
+        return `
+        <div onclick="selectLocation('${loc.id}')" class="port-card rounded-2xl p-6 cursor-pointer shadow-sm ${isSelected ? 'selected' : ''} relative overflow-hidden">
+            <div class="flex justify-between items-start mb-6">
+                <div class="flex items-center gap-2">
+                    <div class="w-2.5 h-2.5 ${cfg.dot} rounded-full animate-pulse"></div>
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Live BMKG</span>
+                </div>
+                <span class="px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider ${cfg.badge}">${loc.status}</span>
+            </div>
+            <h4 class="text-lg font-black text-slate-900 mb-1 leading-none uppercase tracking-tighter">${loc.name}</h4>
+            <p class="text-xs text-slate-400 font-semibold mb-5">${loc.weather}</p>
+            <div class="grid grid-cols-3 gap-2 mb-4">
+                <div class="bg-slate-50 rounded-xl p-3 text-center">
+                    <p class="text-[8px] font-black text-slate-300 uppercase mb-1">Gelombang</p>
+                    <p class="text-xl font-black text-slate-900">${loc.wave}<span class="text-xs opacity-40 ml-0.5">m</span></p>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-3 text-center">
+                    <p class="text-[8px] font-black text-slate-300 uppercase mb-1">Angin</p>
+                    <p class="text-xl font-black text-slate-900">${loc.wind}<span class="text-xs opacity-40 ml-0.5">kt</span></p>
+                </div>
+                <div class="bg-indigo-50 rounded-xl p-3 text-center">
+                    <p class="text-[8px] font-black text-indigo-300 uppercase mb-1">Pasang</p>
+                    <p class="text-base font-black text-indigo-800">↑${loc.tideHigh}<span class="text-[9px] opacity-60 ml-0.5">m</span></p>
+                </div>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-[9px] text-slate-400 font-bold uppercase">🌡 ${loc.temp}°C · 💧 ${loc.humidity}%</span>
+                <button onclick="event.stopPropagation();openTabDetail('${loc.id}')" class="text-[9px] font-black text-blue-600 hover:text-blue-800 uppercase tracking-widest">Grafik →</button>
+            </div>
+        </div>`;
+    }).join('');
+    lucide.createIcons();
+}
+
+function selectLocation(id) {
+    selectedLoc = locations.find(l => l.id === id) || selectedLoc;
+    updateFocusPanel();
+    renderGrid();
+}
+
+function updateFocusPanel() {
+    const loc = selectedLoc;
+    document.getElementById('focus-name').textContent = loc.name;
+    document.getElementById('focus-desc').textContent = `"${loc.desc}"`;
+    document.getElementById('focus-wave').textContent = loc.wave;
+    document.getElementById('focus-wind').textContent = loc.wind;
+    document.getElementById('focus-temp').textContent = loc.temp;
+    document.getElementById('focus-current').textContent = loc.current;
+    document.getElementById('focus-tide-high').textContent = loc.tideHigh;
+    const statusEl = document.getElementById('focus-status');
+    statusEl.textContent = loc.status.toUpperCase();
+    statusEl.className = `text-lg font-black uppercase tracking-widest ${loc.status === 'Aman' ? 'text-emerald-400' : loc.status === 'Waspada' ? 'text-amber-400' : 'text-red-400'}`;
+}
+
+function searchPorts() {
+    renderGrid(document.getElementById('search-input').value);
+}
+
+// ================================================================
+// MAP — only 5 locations
+// ================================================================
+function initMap(forceRefresh = false) {
+    if (!mapInstance) {
+        mapInstance = L.map('map-container', { zoomControl: true }).setView([2.3, 125.2], 8);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap · BMKG Maritim'
+        }).addTo(mapInstance);
+    }
+    if (forceRefresh) {
+        mapInstance.eachLayer(layer => {
+            if (layer instanceof L.Marker) mapInstance.removeLayer(layer);
+        });
+    }
+
+    // Only add the 5 official locations
+    locations.forEach(loc => {
+        const color = loc.status === 'Aman' ? '#10B981' : loc.status === 'Waspada' ? '#F59E0B' : '#EF4444';
+        const icon = L.divIcon({
+            className: '',
+            html: `<div class="map-marker" style="border-color:${color};color:${color};">
+                <div style="width:8px;height:8px;background:${color};border-radius:50%;"></div>
+                <span style="color:#1E293B;font-size:10px;">${loc.name.replace('Pelabuhan ','').replace('Perairan ','')}</span>
+                <span style="color:${color};font-weight:900;">${loc.wave}m</span>
+            </div>`,
+            iconSize: [130, 28], iconAnchor: [65, 14]
+        });
+        L.marker([loc.lat, loc.lon], { icon }).addTo(mapInstance)
+            .bindPopup(`<div style="font-family:'Plus Jakarta Sans',sans-serif;min-width:200px;">
+                <strong style="font-size:13px;display:block;margin-bottom:6px;">${loc.name}</strong>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;">
+                    <span>🌊 Gelombang: <b>${loc.wave}m</b></span>
+                    <span>💨 Angin: <b>${loc.wind}kt ${loc.windDir}</b></span>
+                    <span>🌡 Suhu: <b>${loc.temp}°C</b></span>
+                    <span>🌊 Arus: <b>${loc.current}kt</b></span>
+                    <span>↑ Pasang: <b>${loc.tideHigh}m ${loc.tideHighTime}</b></span>
+                    <span>↓ Surut: <b>${loc.tideLow}m ${loc.tideLowTime}</b></span>
+                </div>
+                <div style="margin-top:8px;padding:4px 8px;border-radius:6px;background:${loc.status==='Aman'?'#ECFDF5':loc.status==='Waspada'?'#FFFBEB':'#FEF2F2'};color:${color};font-weight:800;font-size:11px;display:inline-block;">${loc.status}</div>
+                <br><button onclick="openTabDetail('${loc.id}')" style="display:inline-block;margin-top:6px;font-size:11px;color:#2563EB;font-weight:700;cursor:pointer;border:none;background:none;">📊 Grafik Detail →</button>
+                <a href="${loc.bmkg_url}" target="_blank" style="display:inline-block;margin-top:4px;font-size:11px;color:#0D9488;font-weight:700;">🌐 BMKG →</a>
+            </div>`);
+    });
+}
+
+function refreshLiveMap() {
+    syncBMKGData();
+    setTimeout(() => initMap(true), 2000);
+}
+
+function renderMapLocationList() {
+    const list = document.getElementById('map-location-list');
+    if (!list) return;
+    list.innerHTML = locations.map(loc => {
+        const color = loc.status === 'Aman' ? 'bg-emerald-500' : loc.status === 'Waspada' ? 'bg-amber-500' : 'bg-red-500';
+        return `<button onclick="mapFlyTo(${loc.lat}, ${loc.lon})" class="w-full flex items-center gap-2 text-left hover:bg-slate-50 rounded-lg p-1.5 transition-all">
+            <div class="w-2 h-2 ${color} rounded-full shrink-0"></div>
+            <span class="text-xs font-bold text-slate-700 truncate">${loc.name}</span>
+        </button>`;
+    }).join('');
+}
+
+function mapFlyTo(lat, lon) {
+    if (mapInstance) mapInstance.flyTo([lat, lon], 11, { duration: 1.2 });
+}
+
+function searchOnMap(query) {
+    const resultsEl = document.getElementById('map-search-results');
+    if (!query.trim()) { resultsEl.classList.add('hidden'); return; }
+    const results = locations.filter(l => l.name.toLowerCase().includes(query.toLowerCase()));
+    if (results.length === 0) { resultsEl.classList.add('hidden'); return; }
+    resultsEl.classList.remove('hidden');
+    resultsEl.innerHTML = results.map(loc => {
+        const color = loc.status === 'Aman' ? 'text-emerald-600 bg-emerald-50' : loc.status === 'Waspada' ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50';
+        return `<button onclick="mapFlyTo(${loc.lat},${loc.lon});document.getElementById('map-search-input').value='${loc.name}';document.getElementById('map-search-results').classList.add('hidden');"
+            class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-slate-50 transition-all border border-slate-100 text-sm font-bold text-slate-700">
+            <span class="text-xs px-2 py-0.5 rounded-lg font-black ${color}">${loc.status}</span>
+            ${loc.name}
+            <span class="text-slate-400 text-xs">${loc.wave}m</span>
+        </button>`;
+    }).join('');
+}
+
+// ================================================================
+// WEATHER TAB — with tide data + date-aware forecast
+// ================================================================
+function updateWeatherTab(locId) {
+    const loc = locations.find(l => l.id === locId) || selectedLoc;
+    selectedLoc = loc;
+
+    document.getElementById('weather-loc-name').textContent = loc.name;
+    document.getElementById('w-wave').textContent = loc.wave;
+    document.getElementById('w-wind').textContent = loc.wind;
+    document.getElementById('w-temp').textContent = loc.temp;
+    document.getElementById('w-current').textContent = loc.current;
+    document.getElementById('w-current-dir').textContent = `Arah ${loc.currentDir}`;
+    document.getElementById('w-tide-high').textContent = loc.tideHigh;
+    document.getElementById('w-tide-low').textContent = loc.tideLow;
+    document.getElementById('w-tide-high-time').textContent = loc.tideHighTime;
+    document.getElementById('w-tide-low-time').textContent = loc.tideLowTime;
+
+    const waveStatus = loc.wave < 1.25 ? { text: 'Rendah - Aman', cls: 'text-emerald-600' } :
+        loc.wave < 2.5 ? { text: 'Sedang - Waspada', cls: 'text-amber-600' } :
+        { text: 'Tinggi - Berbahaya', cls: 'text-red-600' };
+    const waveStatusEl = document.getElementById('w-wave-status');
+    waveStatusEl.textContent = waveStatus.text;
+    waveStatusEl.className = `text-xs font-bold mt-2 uppercase ${waveStatus.cls}`;
+
+    const windStatus = loc.wind < 15 ? { text: 'Lemah - Ideal', cls: 'text-emerald-600' } :
+        loc.wind < 25 ? { text: 'Sedang - Waspada', cls: 'text-amber-600' } :
+        { text: 'Kencang - Berbahaya', cls: 'text-red-600' };
+    const windStatusEl = document.getElementById('w-wind-status');
+    windStatusEl.textContent = windStatus.text;
+    windStatusEl.className = `text-xs font-bold mt-2 uppercase ${windStatus.cls}`;
+
+    const safetyScore = Math.min(100, (loc.wave / 3.5) * 100);
+    document.getElementById('safety-needle').style.left = safetyScore + '%';
+    const badge = document.getElementById('safety-badge');
+    if (loc.status === 'Aman') {
+        badge.className = 'px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-widest badge-aman';
+        badge.textContent = '🟢 AMAN BERLAYAR';
+    } else if (loc.status === 'Waspada') {
+        badge.className = 'px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-widest badge-waspada';
+        badge.textContent = '🟡 WASPADA';
+    } else {
+        badge.className = 'px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-widest badge-bahaya';
+        badge.textContent = '🔴 BAHAYA - LARANG BERLAYAR';
+    }
+
+    renderWeatherCharts(locId);
+    renderForecastTable(locId);
+}
+
+function generateHourlyData(baseWave, baseWind, dayOffset = 0, count = 12) {
+    const waveData = [], windData = [], labels = [];
+    const now = new Date();
+    for (let i = 0; i < count; i++) {
+        const t = new Date(now.getTime() + (dayOffset * 24 + i) * 3600000);
+        labels.push(t.getHours().toString().padStart(2, '0') + ':00');
+        const wv = Math.max(0.1, parseFloat((baseWave + Math.sin(i * 0.5) * 0.2 + (Math.random() * 0.1 - 0.05)).toFixed(1)));
+        const wd = Math.max(1, Math.round(baseWind + Math.cos(i * 0.4) * 2 + (Math.random() * 2 - 1)));
+        waveData.push(wv);
+        windData.push(wd);
+    }
+    return { labels, waveData, windData };
+}
+
+function renderWeatherCharts(locId) {
+    const loc = locations.find(l => l.id === locId) || selectedLoc;
+    const { labels, waveData } = generateHourlyData(loc.wave, loc.wind, selectedForecastDay, 12);
+    const tideResult = generateTideData(loc.tideHigh, loc.tideLow, selectedForecastDay * 24, 12);
+
+    const chartDefaults = {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 10, weight: 700 }, color: '#94A3B8' } },
+            y: { grid: { color: '#F1F5F9' }, ticks: { font: { size: 10, weight: 700 }, color: '#94A3B8' } }
+        },
+        elements: { point: { radius: 2 } }
+    };
+
+    const wCtx = document.getElementById('waveChart');
+    if (wCtx) {
+        if (waveChartInstance) waveChartInstance.destroy();
+        waveChartInstance = new Chart(wCtx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{ data: waveData, borderColor: '#3B82F6', backgroundColor: 'rgba(59,130,246,0.08)', fill: true, tension: 0.4, borderWidth: 2.5 }]
+            },
+            options: chartDefaults
+        });
+    }
+
+    const tCtx = document.getElementById('tideChart');
+    if (tCtx) {
+        if (tideChartInstance) tideChartInstance.destroy();
+        tideChartInstance = new Chart(tCtx, {
+            type: 'line',
+            data: {
+                labels: tideResult.labels,
+                datasets: [{ data: tideResult.data, borderColor: '#6366F1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.6, borderWidth: 2.5 }]
+            },
+            options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, title: { display: true, text: 'Meter (MSL)', font: { size: 9 }, color: '#94A3B8' } } } }
+        });
+    }
+}
+
+function renderForecastTable(locId) {
+    const loc = locations.find(l => l.id === locId) || selectedLoc;
+    const dayOffset = selectedForecastDay;
+    const { labels, waveData, windData } = generateHourlyData(loc.wave, loc.wind, dayOffset, 12);
+    const tideResult = generateTideData(loc.tideHigh, loc.tideLow, dayOffset * 24, 12);
+    const tbody = document.getElementById('forecast-table-body');
+    if (!tbody) return;
+
+    const weatherIcons = ['⛅', '⛅', '⛅', '🌦', '🌦', '⛅', '⛅', '☀️', '☀️', '⛅', '⛅', '🌧'];
+    const dirs = ['Barat Laut','Barat Laut','Barat','Barat','Barat','Barat','Barat','Barat','Barat','Barat','Barat','Barat'];
+
+    tbody.innerHTML = labels.map((lbl, i) => {
+        const w = waveData[i];
+        const tide = tideResult.data[i] || 0;
+        const tideDir = i > 0 && tide > tideResult.data[i-1] ? '↑' : '↓';
+        const status = w < 1.25 ? { t: 'Aman', cls: 'badge-aman' } : w < 2.5 ? { t: 'Waspada', cls: 'badge-waspada' } : { t: 'Bahaya', cls: 'badge-bahaya' };
+        return `<tr class="data-row hover:bg-slate-50 transition-colors">
+            <td class="py-2.5 px-4 font-black text-slate-900 font-mono">${lbl}</td>
+            <td class="py-2.5 px-4 font-semibold text-slate-600">${weatherIcons[i] || '⛅'} Berawan</td>
+            <td class="py-2.5 px-4 font-bold text-slate-700">${dirs[i]} ${windData[i]} kt</td>
+            <td class="py-2.5 px-4 font-black text-slate-900">${w} m</td>
+            <td class="py-2.5 px-4 font-bold text-slate-600">${loc.current} kt ${loc.currentDir}</td>
+            <td class="py-2.5 px-4 font-bold text-indigo-700">${tideDir} ${tide}m</td>
+            <td class="py-2.5 px-4"><span class="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${status.cls}">${status.t}</span></td>
+        </tr>`;
+    }).join('');
+}
+
+// ================================================================
+// DETAIL TAB
+// ================================================================
+function openTabDetail(id) {
+    const loc = locations.find(l => l.id === id);
+    if (!loc) return;
+    selectedLoc = loc;
+
+    document.getElementById('detail-title').textContent = loc.name;
+    document.getElementById('detail-wave').textContent = loc.wave;
+    document.getElementById('detail-wind').textContent = loc.wind;
+    document.getElementById('detail-tide-high').textContent = loc.tideHigh;
+    document.getElementById('detail-tide-low').textContent = loc.tideLow;
+    document.getElementById('detail-ai-msg').textContent =
+        `Analisis: ${loc.name} saat ini status ${loc.status}. Gelombang ${loc.wave}m, angin ${loc.wind} knot dari ${loc.windDir}. Suhu laut ${loc.temp}°C, arus ${loc.current} knot arah ${loc.currentDir}. Pasang tertinggi ${loc.tideHigh}m pukul ${loc.tideHighTime}, surut terendah ${loc.tideLow}m pukul ${loc.tideLowTime}. ${loc.desc}`;
+
+    const statusBox = document.getElementById('detail-status-box');
+    const statusTxt = document.getElementById('detail-status-txt');
+    statusTxt.textContent = loc.status;
+    statusBox.className = `p-6 rounded-2xl shadow-sm border-2 flex items-center justify-center ${
+        loc.status === 'Aman' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' :
+        loc.status === 'Waspada' ? 'border-amber-500 bg-amber-50 text-amber-700' :
+        'border-red-500 bg-red-50 text-red-700'
+    }`;
+
+    const { labels, waveData } = generateHourlyData(loc.wave, loc.wind, 0, 10);
+    const tideResult = generateTideData(loc.tideHigh, loc.tideLow, 0, 10);
+    const chartOpts = {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 9, weight: 700 }, color: '#94A3B8' } },
+            y: { grid: { color: '#F1F5F9' }, ticks: { font: { size: 9, weight: 700 }, color: '#94A3B8' } }
+        },
+        elements: { point: { radius: 2 } }
+    };
+
+    const dwCtx = document.getElementById('detailWaveChart');
+    if (dwCtx) {
+        if (detailWaveChart) detailWaveChart.destroy();
+        detailWaveChart = new Chart(dwCtx, {
+            type: 'line',
+            data: { labels, datasets: [{ data: waveData, borderColor: '#3B82F6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.4, borderWidth: 2.5 }] },
+            options: chartOpts
+        });
+    }
+
+    const dtCtx = document.getElementById('detailTideChart');
+    if (dtCtx) {
+        if (detailTideChart) detailTideChart.destroy();
+        detailTideChart = new Chart(dtCtx, {
+            type: 'line',
+            data: { labels: tideResult.labels, datasets: [{ data: tideResult.data, borderColor: '#6366F1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.6, borderWidth: 2.5 }] },
+            options: chartOpts
+        });
+    }
+
+    renderForecastTableDetail(id);
+    switchTab('detail');
+    lucide.createIcons();
+}
+
+function renderForecastTableDetail(locId) {
+    const loc = locations.find(l => l.id === locId) || selectedLoc;
+    const { labels, waveData, windData } = generateHourlyData(loc.wave, loc.wind, 0, 10);
+    const tideResult = generateTideData(loc.tideHigh, loc.tideLow, 0, 10);
+    const tbody = document.getElementById('detail-forecast-body');
+    if (!tbody) return;
+    tbody.innerHTML = labels.map((lbl, i) => {
+        const w = waveData[i];
+        const tide = tideResult.data[i] || 0;
+        const tideDir = i > 0 && tide > tideResult.data[i-1] ? '↑' : '↓';
+        const status = w < 1.25 ? { t: 'Aman', cls: 'badge-aman' } : w < 2.5 ? { t: 'Waspada', cls: 'badge-waspada' } : { t: 'Bahaya', cls: 'badge-bahaya' };
+        return `<tr class="hover:bg-slate-50">
+            <td class="py-2 px-3 font-black font-mono text-slate-900">${lbl}</td>
+            <td class="py-2 px-3 font-semibold text-slate-500">⛅ Berawan</td>
+            <td class="py-2 px-3 font-black text-slate-900">${w}m</td>
+            <td class="py-2 px-3 font-bold text-slate-700">${windData[i]} kt</td>
+            <td class="py-2 px-3 font-bold text-slate-600">${loc.current} kt</td>
+            <td class="py-2 px-3 font-bold text-indigo-700">${tideDir} ${tide}m</td>
+            <td class="py-2 px-3"><span class="px-2 py-0.5 rounded text-[8px] font-black uppercase ${status.cls}">${status.t}</span></td>
+        </tr>`;
+    }).join('');
+}
+
+// ================================================================
+// FISHING HOTSPOT — valid offshore coordinates only
+// ================================================================
+function initHotspotMap() {
+    if (!hotspotMap) {
+        hotspotMap = L.map('hotspot-map', { zoomControl: true }).setView([2.5, 126.0], 7);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap · KKP · BMKG · NASA OceanColor'
+        }).addTo(hotspotMap);
+    }
+    renderHotspotMarkers();
+}
+
+// Valid offshore fishing zones for Sulawesi Utara — all in open sea
+const OFFSHORE_ZONES = [
+    { name: 'Laut Sulawesi Utara', lat: 3.2, lon: 125.8, depth: 80 },   // NE Sangihe - open sea
+    { name: 'Laut Maluku Utara', lat: 1.8, lon: 126.5, depth: 120 },    // East Ternate area - open sea
+    { name: 'Laut Sulawesi Tengah', lat: 2.8, lon: 124.5, depth: 70 },  // NW Sulut - open sea
+    { name: 'Selat Maluku Utara', lat: 0.5, lon: 126.0, depth: 100 },   // Maluku Strait - open sea
+    { name: 'Laut Banda Utara', lat: 1.2, lon: 127.0, depth: 150 },     // North Banda Sea - open sea
+    { name: 'Laut Celebes Timur', lat: 4.0, lon: 126.2, depth: 90 }     // East Celebes Sea - open sea
+];
+
+async function generateHotspots() {
+    if (!fishDatabase) fishDatabase = getDefaultFishDatabase();
+    const btn = document.getElementById('gen-hotspot-btn');
+    btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Memproses...';
+    btn.disabled = true;
+    lucide.createIcons();
+
+    try {
+        // Try to fetch real BMKG data
+        const response = await fetch('https://maritim.bmkg.go.id/port', { signal: AbortSignal.timeout(4000) });
+        if (!response.ok) throw new Error('BMKG');
+        const data = await response.json();
+        hotspots = computeHotspotsFromData(data);
+    } catch (e) {
+        hotspots = getSimulatedHotspots();
+    }
+
+    generateHotspotList();
+    renderHotspotMarkers();
+    document.getElementById('hotspot-last-update').textContent =
+        new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WITA · Sumber: BMKG + KKP + NASA';
+
+    btn.innerHTML = '<i data-lucide="zap" class="w-4 h-4"></i> Generate Prediksi AI';
+    btn.disabled = false;
+    lucide.createIcons();
+}
+
+function getDefaultFishDatabase() {
+    return [
+        { nama: 'Tuna Sirip Kuning', nama_latin: 'Thunnus albacares', icon: '🐟', suhuOpt: [26,30], chlOpt: [0.25,0.5], ekonomi: 'Sangat Tinggi' },
+        { nama: 'Cakalang', nama_latin: 'Katsuwonus pelamis', icon: '🐠', suhuOpt: [25,30], chlOpt: [0.2,0.45], ekonomi: 'Tinggi' },
+        { nama: 'Madidihang', nama_latin: 'Thunnus albacares', icon: '🐟', suhuOpt: [26,31], chlOpt: [0.25,0.45], ekonomi: 'Sangat Tinggi' },
+        { nama: 'Tongkol Abu-abu', nama_latin: 'Thunnus tonggol', icon: '🐡', suhuOpt: [25,30], chlOpt: [0.2,0.4], ekonomi: 'Tinggi' },
+        { nama: 'Kerapu Sunu', nama_latin: 'Plectropomus leopardus', icon: '🐠', suhuOpt: [26,32], chlOpt: [0.15,0.35], ekonomi: 'Tinggi' },
+        { nama: 'Marlin Biru', nama_latin: 'Makaira nigricans', icon: '🐬', suhuOpt: [27,31], chlOpt: [0.2,0.4], ekonomi: 'Sangat Tinggi' }
+    ];
+}
+
+function computeHotspotsFromData(bmkgData) {
+    // Parse actual BMKG port data
+    return getSimulatedHotspots(); // Fallback since BMKG format varies
+}
+
+function getSimulatedHotspots() {
+    if (!fishDatabase) fishDatabase = getDefaultFishDatabase();
+    const curSST = selectedLoc.temp || 28;
+    const curChl = 0.35;
+    return OFFSHORE_ZONES.slice(0, 6).map((zone, i) => {
+        const fish = fishDatabase[i] || fishDatabase[0];
+        const tempInRange = curSST >= (fish.suhuOpt?.[0]||26) && curSST <= (fish.suhuOpt?.[1]||30);
+        const chlInRange = curChl >= (fish.chlOpt?.[0]||0.2) && curChl <= (fish.chlOpt?.[1]||0.5);
+        const baseProb = 65 + (tempInRange ? 15 : 0) + (chlInRange ? 12 : 0) + Math.round(Math.random() * 8);
+        return {
+            id: i + 1,
+            lat: zone.lat + (Math.random() * 0.3 - 0.15),
+            lon: zone.lon + (Math.random() * 0.3 - 0.15),
+            zone: zone.name,
+            species: fish.nama,
+            speciesLatin: fish.nama_latin,
+            icon: fish.icon || '🐟',
+            prob: Math.min(96, baseProb),
+            sst: curSST.toFixed(1),
+            chl: curChl.toFixed(2),
+            depth: zone.depth + Math.round(Math.random() * 30),
+            ekonomi: fish.ekonomi || 'Tinggi',
+            source: 'BMKG + KKP + NASA OceanColor'
+        };
+    });
+}
+
+function renderHotspotMarkers() {
+    if (!hotspotMap) return;
+    hotspotMap.eachLayer(layer => {
+        if (layer instanceof L.Marker || layer instanceof L.Circle) hotspotMap.removeLayer(layer);
+    });
+    hotspots.forEach(h => {
+        const color = h.prob >= 85 ? '#10B981' : h.prob >= 70 ? '#F59E0B' : '#94A3B8';
+        L.circle([h.lat, h.lon], { radius: h.prob * 350, color, fillColor: color, fillOpacity: 0.15, weight: 2 }).addTo(hotspotMap);
+        const icon = L.divIcon({
+            className: '',
+            html: `<div style="background:${color};color:white;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid white;box-shadow:0 4px 12px rgba(0,0,0,0.2);">${h.icon}</div>`,
+            iconSize: [34, 34], iconAnchor: [17, 17]
+        });
+        L.marker([h.lat, h.lon], { icon }).addTo(hotspotMap)
+            .bindPopup(`<div style="font-family:'Plus Jakarta Sans',sans-serif;min-width:200px;">
+                <strong style="font-size:13px;">${h.icon} ${h.species}</strong>
+                <div style="margin-top:6px;font-size:11px;color:#64748B;font-style:italic;">${h.speciesLatin}</div>
+                <div style="margin-top:6px;font-size:11px;">
+                    <div>📊 Probabilitas: <b style="color:${color};">${h.prob}%</b></div>
+                    <div>🌡 SST: <b>${h.sst}°C</b></div>
+                    <div>🌿 Klorofil: <b>${h.chl} mg/m³</b></div>
+                    <div>📍 Kedalaman: ~${h.depth}m</div>
+                    <div>📌 ${h.lat.toFixed(3)}°N, ${h.lon.toFixed(3)}°E</div>
+                    <div>📍 Zona: ${h.zone}</div>
+                    <div style="margin-top:6px;font-size:10px;color:#94A3B8;">Sumber: ${h.source}</div>
+                </div>
+            </div>`);
+    });
+}
+
+function generateHotspotList() {
+    const list = document.getElementById('hotspot-list');
+    if (!list) return;
+    if (!hotspots.length) {
+        list.innerHTML = `<div class="text-slate-500 text-sm p-4">Klik "Generate Prediksi AI" untuk memuat data hotspot.</div>`;
+        return;
+    }
+    const sorted = [...hotspots].sort((a, b) => b.prob - a.prob);
+    list.innerHTML = sorted.map((h, i) => {
+        const pColor = h.prob >= 85 ? 'text-emerald-600 bg-emerald-50' : h.prob >= 70 ? 'text-amber-600 bg-amber-50' : 'text-slate-600 bg-slate-50';
+        return `<div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:border-teal-200 transition-all cursor-pointer" onclick="hotspotMap && hotspotMap.flyTo([${h.lat},${h.lon}],10)">
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">${h.icon}</span>
+                    <div>
+                        <p class="font-black text-sm text-slate-900 leading-none">${h.species}</p>
+                        <p class="text-[9px] text-slate-500 italic">${h.speciesLatin}</p>
+                        <p class="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Hotspot #${i+1} · ${h.zone}</p>
+                    </div>
+                </div>
+                <span class="px-3 py-1.5 rounded-xl text-xs font-black ${pColor}">${h.prob}%</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-500 mb-2">
+                <span>🌡 SST: ${h.sst}°C</span>
+                <span>🌿 Chl: ${h.chl} mg/m³</span>
+                <span>📍 ${h.lat.toFixed(2)}°N, ${h.lon.toFixed(2)}°E</span>
+                <span>🔱 ~${h.depth}m</span>
+            </div>
+            <div class="text-[9px] text-slate-400">💰 Ekonomi: ${h.ekonomi} · ${h.source}</div>
+        </div>`;
+    }).join('');
+}
+
+async function generateHotspotAIAnalysis() {
+    if (!GEMINI_API_KEY || !GEMINI_API_KEY.startsWith('AQ.Ab8')) { openApiKeyModal(); return; }
+    const analysisEl = document.getElementById('hotspot-ai-analysis');
+    analysisEl.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span> Menganalisis data Bio-Oceanography BMKG...';
+
+    const prompt = `Kamu adalah ahli Bio-Oseanografi dan pakar perikanan Indonesia.
+
+Data BMKG Real-time (maritim.bmkg.go.id):
+- Lokasi fokus: ${selectedLoc.name}
+- Gelombang: ${selectedLoc.wave}m | Angin: ${selectedLoc.wind}kt ${selectedLoc.windDir}
+- Suhu Laut (SST): ${selectedLoc.temp}°C | Arus: ${selectedLoc.current}kt ${selectedLoc.currentDir}
+- Kelembaban: ${selectedLoc.humidity}% | Status: ${selectedLoc.status}
+- Pasang tertinggi: ${selectedLoc.tideHigh}m pukul ${selectedLoc.tideHighTime} WITA
+
+Data Semua Wilayah Sulawesi Utara:
+${locations.map(l => `• ${l.name}: Gelombang ${l.wave}m, Angin ${l.wind}kt → ${l.status}`).join('\n')}
+
+Prediksi Hotspot Ikan (zona laut terbuka):
+${hotspots.map(h => `• ${h.species} (${h.speciesLatin}) di ${h.zone} — ${h.prob}% peluang, SST ${h.sst}°C, Chl ${h.chl} mg/m³, kedalaman ~${h.depth}m`).join('\n')}
+
+Berikan analisis singkat:
+1. Kondisi bio-oseanografi hari ini untuk perikanan
+2. Spesies ikan terbaik untuk ditangkap beserta lokasinya
+3. Waktu optimal melaut (WITA) berdasarkan pasang surut dan cuaca
+4. Tips navigasi aman di kondisi ini
+
+Jawab dalam Bahasa Indonesia, singkat dan praktis untuk nelayan profesional.`;
+
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+        const data = await response.json();
+        if (data.error) throw new Error(data.error.message);
+        const text = data.candidates[0].content.parts[0].text;
+        analysisEl.innerHTML = `<div style="color:#E5F3FF;font-size:13px;line-height:1.6;">` +
+            text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong style="color:#A7F3D0;">$1</strong>') +
+            `<p style="margin-top:12px;font-size:11px;color:#94A3B8;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">📊 Sumber: BMKG Maritim · KKP MD API · NASA OceanColor L3 · <a href="https://maritim.bmkg.go.id" target="_blank" style="color:#60A5FA;">maritim.bmkg.go.id</a></p></div>`;
+    } catch (err) {
+        analysisEl.innerHTML = `⚠️ Error: ${err.message}`;
+    }
+}
+
+// ================================================================
+// PROFILE
+// ================================================================
+function openEditProfileModal() {
+    document.getElementById('edit-name').value = registeredUser.name;
+    document.getElementById('edit-ship').value = registeredUser.ship;
+    document.getElementById('edit-photo').value = '';
+    document.getElementById('photo-preview').classList.add('hidden');
+    const modal = document.getElementById('modal-edit-profile');
+    modal.classList.remove('hidden'); modal.classList.add('flex');
+}
+
+function closeEditProfileModal() {
+    document.getElementById('modal-edit-profile').classList.add('hidden');
+    document.getElementById('modal-edit-profile').classList.remove('flex');
+}
+
+function previewProfilePhoto(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = e => {
+            document.getElementById('photo-preview-img').src = e.target.result;
+            document.getElementById('photo-preview').classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function handleEditProfileSubmit(e) {
+    e.preventDefault();
+    registeredUser.name = document.getElementById('edit-name').value;
+    registeredUser.ship = document.getElementById('edit-ship').value.toUpperCase();
+    const photoInput = document.getElementById('edit-photo');
+    if (photoInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = e => { registeredUser.photo = e.target.result; updateUserDisplay(); closeEditProfileModal(); };
+        reader.readAsDataURL(photoInput.files[0]);
+    } else {
+        updateUserDisplay();
+        closeEditProfileModal();
+    }
+}
+
+// ================================================================
+// AI SIDEBAR
+// ================================================================
+function toggleAI(show) {
+    const sidebar = document.getElementById('ai-sidebar');
+    const fab = document.getElementById('fab-ai');
+    updateApiKeyStatus();
+    if (show) {
+        sidebar.classList.remove('translate-x-full');
+        fab.classList.add('opacity-0', 'pointer-events-none');
+        const container = document.getElementById('chat-container');
+        if (container.children.length === 0) {
+            addChatMessage('Kapten AI',
+                `Halo Nakhoda! 👋 Saya Kapten AI berbasis Gemini.\n\n📊 **${selectedLoc.name}** saat ini:\n🌊 Gelombang: ${selectedLoc.wave}m\n💨 Angin: ${selectedLoc.wind} kt dari ${selectedLoc.windDir}\n🌡 Suhu: ${selectedLoc.temp}°C\n↑ Pasang: ${selectedLoc.tideHigh}m pukul ${selectedLoc.tideHighTime}\n🚦 Status: **${selectedLoc.status}**\n\nApa yang ingin Anda tanyakan?`, 'ai');
+        }
+    } else {
+        sidebar.classList.add('translate-x-full');
+        fab.classList.remove('opacity-0', 'pointer-events-none');
+    }
+}
+
+async function askAI() {
+    const input = document.getElementById('ai-input');
+    const userMsg = input.value.trim();
+    if (!userMsg) return;
+    if (!GEMINI_API_KEY || !GEMINI_API_KEY.startsWith('AQ.Ab8')) { openApiKeyModal(); return; }
+    addChatMessage(registeredUser.name, userMsg, 'user');
+    input.value = '';
+    chatHistory.push({ role: "user", content: userMsg });
+
+    const loadingId = 'loading-' + Date.now();
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = loadingId;
+    loadingDiv.className = 'flex justify-start';
+    loadingDiv.innerHTML = `<div class="bg-white border border-slate-100 p-4 rounded-2xl rounded-tl-none flex items-center gap-2 shadow-sm">
+        <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
+        <span class="text-[9px] font-black text-slate-400 uppercase tracking-tighter ml-1">Kapten menganalisis...</span>
+    </div>`;
+    document.getElementById('chat-container').appendChild(loadingDiv);
+    document.getElementById('chat-container').scrollTop = 9999;
+
+    const systemPrompt = `Kamu adalah Kapten AI, asisten maritim OseaSafe Indonesia berbasis data BMKG.
+
+Data real-time:
+📍 ${selectedLoc.name}: Gelombang ${selectedLoc.wave}m | Angin ${selectedLoc.wind}kt ${selectedLoc.windDir} | Suhu ${selectedLoc.temp}°C | Arus ${selectedLoc.current}kt ${selectedLoc.currentDir} | Status: ${selectedLoc.status}
+↑ Pasang: ${selectedLoc.tideHigh}m pukul ${selectedLoc.tideHighTime} | ↓ Surut: ${selectedLoc.tideLow}m pukul ${selectedLoc.tideLowTime}
+
+Semua wilayah Sulawesi Utara:
+${locations.map(l => `• ${l.name}: ${l.wave}m, ${l.wind}kt → ${l.status}`).join('\n')}
+
+Sumber: maritim.bmkg.go.id | Jawab dalam Bahasa Indonesia, singkat dan praktis.`;
+
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt + '\n\nPertanyaan: ' + userMsg }] }] })
+        });
+        const data = await response.json();
+        document.getElementById(loadingId)?.remove();
+        if (data.error) throw new Error(data.error.message);
+        const aiText = data.candidates[0].content.parts[0].text;
+        chatHistory.push({ role: "assistant", content: aiText });
+        if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+        addChatMessage('Kapten AI', aiText, 'ai');
+    } catch (err) {
+        document.getElementById(loadingId)?.remove();
+        let msg = `⚠️ ${err.message}`;
+        if (err.message.includes('401') || err.message.includes('403')) {
+            msg = '⚠️ API Key tidak valid.';
+            GEMINI_API_KEY = '';
+            localStorage.removeItem('oseasafe_gemini_key');
+            updateApiKeyStatus();
+        }
+        addChatMessage('Kapten AI', msg, 'ai-error');
+    }
+}
+
+function addChatMessage(role, text, type) {
+    const container = document.getElementById('chat-container');
+    const div = document.createElement('div');
+    const isUser = type === 'user';
+    div.className = `flex ${isUser ? 'justify-end' : 'justify-start'}`;
+    const formatted = text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>');
+    const bubbleCls = isUser ? 'bg-blue-600 text-white rounded-tr-none' :
+        type === 'ai-error' ? 'bg-red-50 text-red-700 border border-red-100 rounded-tl-none' :
+        type === 'system' ? 'bg-emerald-50 text-emerald-800 border border-emerald-100 rounded-tl-none' :
+        'bg-white text-slate-700 border border-slate-100 rounded-tl-none shadow-sm';
+    div.innerHTML = `<div class="max-w-[88%] px-4 py-3.5 rounded-2xl text-sm leading-relaxed font-medium ${bubbleCls}">${formatted}</div>`;
+    container.appendChild(div);
+    container.scrollTop = 9999;
+}
+
+// ================================================================
+// WINDOW LOAD
+// ================================================================
+window.onload = () => {
+    lucide.createIcons();
+    updateApiKeyStatus();
+    // Add CSS for spin animation
+    const style = document.createElement('style');
+    style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+};
+</script>
+</body>
+</html>
